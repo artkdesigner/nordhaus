@@ -206,19 +206,26 @@
 // Echo — особый случай: у него 3 слайда, переключающихся БЕЗ смены положения на странице
 // (echo_bg-img просто наезжают друг на друга по xPercent), поэтому обычная проверка
 // "элемент вошёл в верхнюю полосу вьюпорта" не может различить слайды между собой.
-// Нужен активный флаг echoSlide0Active (см. window.__setEchoSlide0Active ниже, дёргается
-// из setupEchoSlides по onEnter/onLeaveBack): тёмный navbar над echo — только пока активен
-// именно 1-й слайд, светлый — на 2-м и 3-м.
+// Нужен активный индекс echoActiveSlide (см. window.__setEchoActiveSlide ниже, дёргается
+// из setupEchoSlides по onEnter/onLeaveBack каждого перехода): по прямому запросу — светлый
+// navbar на 1-м и 2-м слайде, тёмный — только на 3-м (индекс 2).
 (function () {
   var navbar = document.querySelector('.navbar');
   // 2026-08-25: добавлены .section-approach/.section-news/.section-founder — тёмный navbar
   // поверх них по прямому запросу (.section-slider намеренно НЕ добавлена — навбар над ней
   // должен остаться светлым).
-  var triggers = Array.prototype.slice.call(document.querySelectorAll('.section-philosophy, .section_horizon, .section_quiet, .section-idea, .section-services, .section-approach, .section-news, .section-founder, .navbar-dark-trigger'));
+  // 2026-08-25 (фикс бага): .section_horizon в списке заменена на .horizon_mask — сама секция
+  // 725vh высотой, и её bounding rect остаётся "перекрывающим" navbar ещё ДОЛГО после того, как
+  // horizon визуально скрылась под следующими наехавшими секциями (z-index/margin-top трюк не
+  // убирает секцию из документа, просто рисует поверх неё) — из-за этого echo (следующая секция,
+  // z-index выше) ошибочно наследовала "тёмный" статус от horizon даже на своём 1-м слайде,
+  // который должен быть светлым. .horizon_mask — реальный sticky-бокс (100vh, position:sticky),
+  // его rect корректно отражает ТЕКУЩУЮ видимость, а не номинальный размер всей секции.
+  var triggers = Array.prototype.slice.call(document.querySelectorAll('.section-philosophy, .horizon_mask, .section_quiet, .section-idea, .section-services, .section-approach, .section-news, .section-founder, .navbar-dark-trigger'));
   if (!navbar || !triggers.length) return;
 
   var echoSection = document.querySelector('.section_echo');
-  var echoSlide0Active = true;
+  var echoActiveSlide = 0;
 
   // 2026-08-25 (фикс бага): .navbar_project-link (Silence/Horizon/Echo/Quiet Geometry/Studio/
   // contacts) и .menu-btn имеют СВОЙ явный color в CSS (var(--text-light-primary)) — собственное
@@ -246,15 +253,15 @@
       var r = el.getBoundingClientRect();
       return r.top <= navHeight && r.bottom >= 0;
     });
-    if (!isDark && echoSection && echoSlide0Active) {
+    if (!isDark && echoSection && echoActiveSlide === 2) {
       var er = echoSection.getBoundingClientRect();
       isDark = er.top <= navHeight && er.bottom >= 0;
     }
     setDark(isDark);
   }
 
-  window.__setEchoSlide0Active = function (isActive) {
-    echoSlide0Active = isActive;
+  window.__setEchoActiveSlide = function (index) {
+    echoActiveSlide = index;
     update();
   };
 
@@ -526,13 +533,13 @@
             gsap.to(cardSlide, { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
             gsap.to(bgSlide, { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
             gsap.to(bgSlides[i - 1], { xPercent: -10, duration: 1, ease: 'power2.inOut', overwrite: true });
-            if (i === 1 && window.__setEchoSlide0Active) window.__setEchoSlide0Active(false);
+            if (window.__setEchoActiveSlide) window.__setEchoActiveSlide(i);
           },
           onLeaveBack: function () {
             gsap.to(cardSlide, { xPercent: 100, duration: 1, ease: 'power2.inOut', overwrite: true });
             gsap.to(bgSlide, { xPercent: 100, duration: 1, ease: 'power2.inOut', overwrite: true });
             gsap.to(bgSlides[i - 1], { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
-            if (i === 1 && window.__setEchoSlide0Active) window.__setEchoSlide0Active(true);
+            if (window.__setEchoActiveSlide) window.__setEchoActiveSlide(i - 1);
           }
         });
       })(i);
@@ -779,7 +786,11 @@
     return inner;
   });
 
-  gsap.set(titleWraps, { y: '100vh' });
+  // 2026-08-25: y:'100vh' -> yPercent:100 по прямому запросу ("слишком резко") — 100vh почти
+  // всегда сильно больше собственной высоты .idea_title-wrap, поэтому элемент пролетал куда
+  // больший путь, чем нужно для честного "выезда снизу", и выглядел рывком. yPercent:100
+  // отталкивается от РЕАЛЬНОЙ высоты самого элемента.
+  gsap.set(titleWraps, { yPercent: 100 });
   gsap.set(titles, { y: '4rem', opacity: 0 });
   gsap.set(titleInners, { yPercent: 100 });
   gsap.set(textWraps, { y: '2rem', opacity: 0 });
@@ -796,7 +807,7 @@
 
   // фаза title-wrap: окно 0.25-0.50 (span 0.25), 4 элемента
   masterTl
-    .to(titleWraps, { y: 0, duration: 0.15, ease: 'none', stagger: 0.0333 }, 0.25)
+    .to(titleWraps, { yPercent: 0, duration: 0.15, ease: 'none', stagger: 0.0333 }, 0.25)
     .to(titles, { y: 0, opacity: 1, duration: 0.15, ease: 'none', stagger: 0.0333 }, 0.25)
     .to(titleInners, { yPercent: 0, duration: 0.15, ease: 'none', stagger: 0.0333 }, 0.25)
     // фаза text-wrap: окно 0.50-0.65 (span 0.15), 3 элемента
@@ -891,9 +902,9 @@
 //    очереди slide-up(2rem) + opacity, задержка 0.2с/длительность 1.2с, обратимый paused timeline
 //    (onEnter -> play(), onLeaveBack -> reverse()), триггер на top 85% самого .approach_middle —
 //    БЕЗ ИЗМЕНЕНИЙ, приезжает обычным потоком уже после того, как approach_top открепился.
-// 3) прямые дети .approach_bottom (.approach_circle) появляются по очереди slide-up(50% своей
-// высоты через yPercent) + opacity — SCRUB, привязан к позиции скрола (ScrollTrigger start:'top
-// 80%' на самом .approach_bottom, end:'+=60%', stagger 0.2) — БЕЗ ИЗМЕНЕНИЙ.
+// 3) прямые дети .approach_bottom (.approach_circle) появляются по очереди slide-up(100% своей
+// высоты через yPercent — было 50%, увеличено по прямому запросу) + opacity — SCRUB, привязан к
+// позиции скрола (ScrollTrigger start:'top 80%' на самом .approach_bottom, end:'+=60%', stagger 0.2).
 (function () {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
@@ -983,7 +994,7 @@
   if (bottom) {
     var bottomItems = Array.prototype.slice.call(bottom.children);
     if (bottomItems.length) {
-      gsap.set(bottomItems, { yPercent: 50, opacity: 0 });
+      gsap.set(bottomItems, { yPercent: 100, opacity: 0 });
 
       gsap.timeline({
         scrollTrigger: {
