@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://artkdesigner.github.io/nordhaus/sitemap.xml
