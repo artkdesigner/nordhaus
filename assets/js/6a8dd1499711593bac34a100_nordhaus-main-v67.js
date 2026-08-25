@@ -207,7 +207,10 @@
 // именно 1-й слайд, светлый — на 2-м и 3-м.
 (function () {
   var navbar = document.querySelector('.navbar');
-  var triggers = Array.prototype.slice.call(document.querySelectorAll('.section-philosophy, .section_horizon, .section_quiet, .section-idea, .section-services, .navbar-dark-trigger'));
+  // 2026-08-25: добавлены .section-approach/.section-news/.section-founder — тёмный navbar
+  // поверх них по прямому запросу (.section-slider намеренно НЕ добавлена — навбар над ней
+  // должен остаться светлым).
+  var triggers = Array.prototype.slice.call(document.querySelectorAll('.section-philosophy, .section_horizon, .section_quiet, .section-idea, .section-services, .section-approach, .section-news, .section-founder, .navbar-dark-trigger'));
   if (!navbar || !triggers.length) return;
 
   var echoSection = document.querySelector('.section_echo');
@@ -605,14 +608,13 @@
 // совпадает с брейкпоинтом Webflow "medium", где секция теряет pin и превращается
 // в обычный поток — см. .section-services/.services_list-item в стилях).
 // Десктоп (>=992px):
-//   - entrance — paused timeline на top 10% (не scrub), обратимый: onEnter -> play(),
-//     onLeaveBack -> reverse(). Сначала .services_image-wrap растёт из левого нижнего угла
-//     (scale 0.1 -> 1, ease power2.inOut — было scale:0/power3.out, 2026-08-25 сменили по прямому
-//     запросу "слишком резко, неаккуратно" — 0.1 вместо 0 даёт менее дёрганый старт, inOut вместо
-//     резкого out-easing даёт мягкий разгон/торможение), и только после этого по очереди slide-up
-//     (100% своей высоты) + opacity 0 -> 1 появляются .services_list-item — задержка 0.1с.
-//     clearProps по завершении их tween отдаёт opacity/transform обратно классу current из
-//     hover-логики ниже;
+//   - **2026-08-25 (ревизия)**: .services_image-wrap скейлится 0.1 -> 1 НАПРЯМУЮ ПО СКРОЛУ
+//     (scrub, не played timeline) за первые 50% скрола секции (trigger: section, 'top top' ->
+//     'bottom bottom'). Как только scale доходит до 1 (пересечение локального прогресса 1.0),
+//     по очереди slide-up (100% своей высоты) + opacity 0 -> 1 появляются .services_list-item —
+//     задержка 0.1с, played reversible timeline (play() вперёд/reverse() назад при пересечении
+//     этой же отметки), clearProps по завершении их tween отдаёт opacity/transform обратно классу
+//     current из hover-логики ниже;
 //   - наведение на карточку подсвечивает её и синхронизированное большое фото —
 //     .services_big-img с тем же индексом внутри .services_image-wrap получает current.
 // Планшет/мобилка (<992px): наведения и entrance-эффекта фото нет, карточки появляются по
@@ -659,53 +661,40 @@
         return handler;
       });
 
-      gsap.set(imageWrap, { transformOrigin: 'left bottom' });
+      gsap.set(imageWrap, { transformOrigin: 'left bottom', scale: 0.1 });
       gsap.set(items, { yPercent: 100, opacity: 0 });
 
-      var entranceTl = gsap.timeline({ paused: true });
-      entranceTl
-        .fromTo(imageWrap, { scale: 0.1 }, {
-          scale: 1,
-          duration: 1.1,
-          ease: 'power2.inOut',
-          onStart: function () { imageWrapReady = false; },
-          onComplete: function () { imageWrapReady = true; },
-          onReverseComplete: function () { imageWrapReady = false; }
-        })
-        .to(items, {
-          yPercent: 0,
-          opacity: 1,
-          duration: 0.6,
-          ease: 'power2.out',
-          stagger: 0.1,
-          clearProps: 'transform,opacity'
-        });
-
-      var entranceTrigger = ScrollTrigger.create({
-        trigger: section,
-        start: 'top 10%',
-        onEnter: function () { entranceTl.play(); },
-        onLeaveBack: function () { entranceTl.reverse(); }
+      // 2026-08-25 (ревизия): .services_image-wrap теперь скейлится 0.1 -> 1 НАПРЯМУЮ ПО СКРОЛУ
+      // (scrub), а не time-based tween на 'top 10%' — по прямому запросу, за первые 50% скрола
+      // секции (trigger: section, 'top top' -> 'bottom bottom', localProgress = self.progress/0.5,
+      // clamp 1). Список .services_list-item появляется по очереди СРАЗУ ПОСЛЕ, когда scale
+      // доходит до 1 (localProgress===1) — played reversible timeline, не сам scrub, тот же
+      // gating-принцип, что и раньше: play() при пересечении отметки вперёд, reverse() назад.
+      var itemsTl = gsap.timeline({ paused: true });
+      itemsTl.to(items, {
+        yPercent: 0,
+        opacity: 1,
+        duration: 0.6,
+        ease: 'power2.out',
+        stagger: 0.1,
+        clearProps: 'transform,opacity'
       });
 
-      // 2026-08-25: доп. scrub-анимация .services_image-wrap по скролу секции — zoom (scale
-      // 1 -> 1.08), завершается на 50% скрола секции. **Гейтится на imageWrapReady** (тот же
-      // флаг, что блокирует hover до конца entrance) — раньше эта анимация была отдельным
-      // независимым ScrollTrigger'ом вне этого IIFE и тоже писала в scale, из-за чего при
-      // быстром скролле, догоняющем ещё не завершившийся entrance (0.1->1), оба одновременно
-      // писали в transform в одном тике и визуально дёргали друг друга (проверено). Здесь —
-      // ручной gsap.set внутри onUpdate вместо привязанного timeline, поэтому пока
-      // imageWrapReady==false (entrance ещё не доиграл) apply просто не происходит вообще —
-      // конфликта нет в принципе, а не просто "маловероятен".
-      var zoomTrigger = ScrollTrigger.create({
+      var scaleTrigger = ScrollTrigger.create({
         trigger: section,
         start: 'top top',
         end: 'bottom bottom',
         scrub: true,
         onUpdate: function (self) {
-          if (!imageWrapReady) return;
           var localProgress = Math.min(self.progress / 0.5, 1);
-          gsap.set(imageWrap, { scale: 1 + 0.08 * localProgress });
+          gsap.set(imageWrap, { scale: 0.1 + 0.9 * localProgress });
+          if (localProgress >= 1 && !imageWrapReady) {
+            imageWrapReady = true;
+            itemsTl.play();
+          } else if (localProgress < 1 && imageWrapReady) {
+            imageWrapReady = false;
+            itemsTl.reverse();
+          }
         }
       });
 
@@ -713,9 +702,8 @@
         items.forEach(function (item, index) {
           item.removeEventListener('mouseenter', handlers[index]);
         });
-        entranceTrigger.kill();
-        entranceTl.kill();
-        zoomTrigger.kill();
+        scaleTrigger.kill();
+        itemsTl.kill();
         gsap.set(imageWrap, { clearProps: 'transform,transformOrigin' });
         gsap.set(items, { clearProps: 'transform,opacity' });
       };
@@ -751,53 +739,27 @@
 // Idea: reveal контента секции. Секция осталась плавным потоком (без явной высоты) —
 // предыдущая версия с .idea_title-pin/-runway была откачена: overflow:hidden 100vh-бокс обрезал
 // двухстрочный заголовок (огромный font-size), а 250vh раннвея создавали пустой провал в скроле.
-// 1) **2026-08-25: больше НЕ scrub** — по прямому запросу отказались от завязки на скрол для
-//    .idea_title-wrap. Теперь это обычный обратимый paused timeline (onEnter -> play(),
-//    onLeaveBack -> reverse()), триггер — .idea_top (обёртка вокруг title-wrap'ов и
-//    top-text-wrap'ов) достигает top 90% экрана. 4 .idea_title-wrap выезжают снизу экрана на свою
-//    позицию, одновременно играет анимация .idea_title: подъём + раскрытие через маску (сам
-//    .idea_title — overflow:hidden окно, обёрнутый вокруг текста .idea_title-inner выезжает по Y)
-//    — задержка 0.1с, duration 2с, ease power2.out (было ease:'none' под scrub — на played
-//    timeline это выглядело бы линейно-механически, поэтому сменили на обычный power2.out, как в
-//    остальных played-реувилах сайта).
-// 2) .idea_top-text-wrap — **2026-08-25: переведено со scrub на played (второй раз за день)**.
-//    История: сначала это был scrub-таймлайн на section (top 60% -> +=120%). Добавили гейтинг
-//    (флаг titleRevealed) поверх scrub — привело к "мгновенному впрыгиванию" при быстром скроле
-//    (см. предыдущую версию этого комментария в истории файла) — убрали гейтинг, оставили чистый
-//    scrub. НО пользователь сообщил СНОВА тем же днём о двух проблемах с чистым scrub: (a) снова
-//    иногда стартует до завершения title-wrap (ожидаемо — без гейтинга это лишь "обычно, но не
-//    гарантированно" совпадает по времени, та же формулировка, что и раньше), и (b) opacity
-//    "зависает" неполной, если не доскроллить ровно до конца диапазона +=120% — врождённое
-//    свойство scrub (он не "проигрывается", а жёстко привязан к текущей позиции скрола).
-//    ПРАВИЛЬНОЕ решение — не чинить scrub, а перевести .idea_top-text-wrap на played reversible
-//    timeline (как .bottom_row ниже), потому что: (a) played-таймлайн ВСЕГДА доигрывает до
-//    opacity:1 полностью, независимо от того, докуда доскроллил пользователь — решает проблему
-//    (b); (b) гейтинг played-таймлайна БЕЗОПАСЕН (в отличие от гейтинга scrub) — .play() плавно
-//    анимирует из текущего состояния, не "впрыгивает" — тот же принцип, что уже работает в Founder
-//    (title -> img-wrap -> footer, imgWrapRevealed) и Services (imageWrapReady). Поэтому гейтинг
-//    вернули, но теперь на played-механике: флаг titleRevealed выставляется в titleTl
-//    onComplete/onReverseComplete; textTl.play() вызывается либо сразу в onEnter (если title уже
-//    готов), либо из titleTl.onComplete (если text-wrap's onEnter сработал раньше — тогда просто
-//    ставится флаг textEntered=true и ждёт).
-// 3) .bottom_row (внутри .idea_bottom) — вынесены из scrub-таймлайна группы (2) в СВОИ отдельные
-//    реувилы, по прямому запросу — каждый `.bottom_row` получает независимый обратимый timeline
-//    (duration 0.6, ease power2.out), триггер на САМОМ СЕБЕ, top 60%. Reversible: onEnter ->
-//    play(), onLeaveBack -> reverse(). **2026-08-25: добавлен гейтинг на textRevealed** — по
-//    жалобе "элементы внутри idea_bottom появляются раньше чем idea_top-text-wrap" (естественного
-//    отступа между точками триггеров оказалось недостаточно). Флаг textRevealed выставляется в
-//    onComplete/onReverseComplete группы (2) (textTl); если строка входит в зону раньше, чем текст
-//    доиграл, она не проигрывается сразу, а кладётся в массив pendingRows — textTl.onComplete
-//    проигрывает все накопленные pendingRows разом и очищает массив. При скроле назад строка
-//    убирается из pendingRows (если ещё не проигралась) и себя же реверсит. Тот же безопасный
-//    паттерн, что и text-wrap/title-wrap гейтинг выше — гейтинг played-таймлайна безопасен
-//    (в отличие от гейтинга scrub, см. историю выше).
+// **2026-08-25 (переписано на чистый scrub)**: по прямому запросу — "секция доходит до 25% от
+// верхнего края - запускается анимация title-wrap, после них text-wrap, и дальше уже idea_bottom,
+// всё зависит от скрола". ОДИН master-timeline, привязанный к ScrollTrigger (trigger: section,
+// 'top top' -> 'bottom bottom', scrub:true) — три фазы идут ПОСЛЕДОВАТЕЛЬНО внутри одной шкалы
+// прогресса 0..1 (позиции — доли общего скрола секции, не секунды):
+//   0.00-0.25  — простой (ничего не происходит, секция ещё "въезжает")
+//   0.25-0.50  — .idea_title-wrap (4шт, слайд снизу) + .idea_title (подъём+opacity) +
+//                .idea_title-inner (раскрытие маски) — все три синхронно ('<'), стаггер внутри фазы
+//   0.50-0.65  — .idea_top-text-wrap (3шт)
+//   0.65-1.00  — .bottom_row внутри .idea_bottom (8шт)
+// ease:'none' на всех твинах — стандарт для scrub-таймлайнов на этом сайте (линейная зависимость
+// от позиции скрола, а не "своя" кривая ускорения, которая на scrub всё равно не считывается как
+// анимация со своим временем). Раньше это были played-таймлайны с гейтинг-флагами именно потому,
+// что предыдущий запрос был "НЕ привязывать к скролу" — теперь запрос обратный, поэтому чистый
+// scrub тут корректен, а не "то, от чего раньше отказались": условия изменились.
 (function () {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
   var section = document.querySelector('.section-idea');
   if (!section) return;
 
-  var ideaTop = section.querySelector('.idea_top');
   var titleWraps = Array.prototype.slice.call(section.querySelectorAll('.idea_title-wrap'));
   var titles = Array.prototype.slice.call(section.querySelectorAll('.idea_title'));
   var textWraps = Array.prototype.slice.call(section.querySelectorAll('.idea_top-text-wrap'));
@@ -819,80 +781,24 @@
   gsap.set(textWraps, { y: '2rem', opacity: 0 });
   gsap.set(rows, { y: '2rem', opacity: 0 });
 
-  var titleRevealed = false;
-  var textEntered = false;
-  var textRevealed = false;
-  var pendingRows = [];
-
-  var textTl = gsap.timeline({
-    paused: true,
-    onComplete: function () {
-      textRevealed = true;
-      pendingRows.forEach(function (rowTl) { rowTl.play(); });
-      pendingRows = [];
-    },
-    onReverseComplete: function () { textRevealed = false; }
-  });
-  textTl.to(textWraps, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out', stagger: 0.1 });
-
-  var titleTl = gsap.timeline({
-    paused: true,
-    onComplete: function () {
-      titleRevealed = true;
-      if (textEntered) textTl.play();
-    },
-    onReverseComplete: function () { titleRevealed = false; }
-  });
-  // 2026-08-25: скорость вдвое медленнее по прямому запросу — duration 2->4, stagger 0.1->0.2
-  // (пропорционально, чтобы сохранить тот же относительный ритm между title-wrap'ами).
-  titleTl
-    .to(titleWraps, { y: 0, duration: 4, ease: 'power2.out', stagger: 0.2 })
-    .to(titles, { y: 0, opacity: 1, duration: 4, ease: 'power2.out', stagger: 0.2 }, '<')
-    .to(titleInners, { yPercent: 0, duration: 4, ease: 'power2.out', stagger: 0.2 }, '<');
-
-  if (ideaTop) {
-    ScrollTrigger.create({
-      trigger: ideaTop,
-      start: 'top 90%',
-      onEnter: function () { titleTl.play(); },
-      onLeaveBack: function () { titleTl.reverse(); }
-    });
-  }
-
-  ScrollTrigger.create({
-    trigger: section,
-    start: 'top 60%',
-    onEnter: function () {
-      textEntered = true;
-      if (titleRevealed) textTl.play();
-    },
-    onLeaveBack: function () {
-      textEntered = false;
-      textTl.reverse();
+  var masterTl = gsap.timeline({
+    scrollTrigger: {
+      trigger: section,
+      start: 'top top',
+      end: 'bottom bottom',
+      scrub: true
     }
   });
 
-  rows.forEach(function (row) {
-    var rowTl = gsap.timeline({ paused: true });
-    rowTl.to(row, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out' });
-
-    ScrollTrigger.create({
-      trigger: row,
-      start: 'top 60%',
-      onEnter: function () {
-        if (textRevealed) {
-          rowTl.play();
-        } else if (pendingRows.indexOf(rowTl) === -1) {
-          pendingRows.push(rowTl);
-        }
-      },
-      onLeaveBack: function () {
-        var idx = pendingRows.indexOf(rowTl);
-        if (idx !== -1) pendingRows.splice(idx, 1);
-        rowTl.reverse();
-      }
-    });
-  });
+  // фаза title-wrap: окно 0.25-0.50 (span 0.25), 4 элемента
+  masterTl
+    .to(titleWraps, { y: 0, duration: 0.15, ease: 'none', stagger: 0.0333 }, 0.25)
+    .to(titles, { y: 0, opacity: 1, duration: 0.15, ease: 'none', stagger: 0.0333 }, 0.25)
+    .to(titleInners, { yPercent: 0, duration: 0.15, ease: 'none', stagger: 0.0333 }, 0.25)
+    // фаза text-wrap: окно 0.50-0.65 (span 0.15), 3 элемента
+    .to(textWraps, { y: 0, opacity: 1, duration: 0.09, ease: 'none', stagger: 0.03 }, 0.5)
+    // фаза idea_bottom: окно 0.65-1.0 (span 0.35), 8 элементов
+    .to(rows, { y: 0, opacity: 1, duration: 0.15, ease: 'none', stagger: 0.02857 }, 0.65);
 })();
 
 // Process наезжает на services тем же приёмом, что и раньше в цепочке секций

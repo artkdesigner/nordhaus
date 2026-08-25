@@ -2621,7 +2621,7 @@ figcaption {
   min-height: 100vh;
   padding-right: var(--_size---20);
   padding-left: var(--_size---20);
-  padding-bottom: 100vh;
+  padding-bottom: 50vh;
   background-color: var(--bg);
   margin-top: -100vh;
   position: relative;
@@ -2962,6 +2962,7 @@ figcaption {
 .section-idea {
   z-index: 7;
   padding: var(--_size---150) var(--_size---20);
+  padding-top: calc(var(--_size---150) + 50vh);
   grid-column-gap: var(--_size---100);
   grid-row-gap: var(--_size---100);
   background-color: var(--bg);
@@ -3225,7 +3226,7 @@ figcaption {
   font-family: Editorial New, Times New Roman, sans-serif;
   font-size: 12.875rem;
   font-weight: 200;
-  line-height: 120%;
+  line-height: 100%;
 }
 
 .approach_middle {
