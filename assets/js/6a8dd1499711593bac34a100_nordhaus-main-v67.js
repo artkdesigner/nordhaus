@@ -688,12 +688,34 @@
         onLeaveBack: function () { entranceTl.reverse(); }
       });
 
+      // 2026-08-25: доп. scrub-анимация .services_image-wrap по скролу секции — zoom (scale
+      // 1 -> 1.08), завершается на 50% скрола секции. **Гейтится на imageWrapReady** (тот же
+      // флаг, что блокирует hover до конца entrance) — раньше эта анимация была отдельным
+      // независимым ScrollTrigger'ом вне этого IIFE и тоже писала в scale, из-за чего при
+      // быстром скролле, догоняющем ещё не завершившийся entrance (0.1->1), оба одновременно
+      // писали в transform в одном тике и визуально дёргали друг друга (проверено). Здесь —
+      // ручной gsap.set внутри onUpdate вместо привязанного timeline, поэтому пока
+      // imageWrapReady==false (entrance ещё не доиграл) apply просто не происходит вообще —
+      // конфликта нет в принципе, а не просто "маловероятен".
+      var zoomTrigger = ScrollTrigger.create({
+        trigger: section,
+        start: 'top top',
+        end: 'bottom bottom',
+        scrub: true,
+        onUpdate: function (self) {
+          if (!imageWrapReady) return;
+          var localProgress = Math.min(self.progress / 0.5, 1);
+          gsap.set(imageWrap, { scale: 1 + 0.08 * localProgress });
+        }
+      });
+
       return function () {
         items.forEach(function (item, index) {
           item.removeEventListener('mouseenter', handlers[index]);
         });
         entranceTrigger.kill();
         entranceTl.kill();
+        zoomTrigger.kill();
         gsap.set(imageWrap, { clearProps: 'transform,transformOrigin' });
         gsap.set(items, { clearProps: 'transform,opacity' });
       };
@@ -721,44 +743,6 @@
       return function () {
         trigger.kill();
         gsap.set(items, { clearProps: 'transform,opacity' });
-      };
-    }
-  });
-})();
-
-// Services: доп. scrub-анимация .services_image-wrap по скролу секции — лёгкий вертикальный
-// parallax-сдвиг (yPercent 0 -> -6), который завершается ровно на 50% скрола секции (start:
-// 'top top', end: 'bottom bottom', но сам tween в таймлайне занимает только первую половину
-// диапазона — дальше idle-заглушка той же длительности держит финальное состояние до конца
-// секции). Добавлено 2026-08-25 по прямому запросу. **Свойство намеренно НЕ scale** — entrance-
-// анимация выше уже управляет scale (0.1->1) на этом же элементе через paused timeline/hover;
-// scale тут дал бы гонку двух независимых GSAP-контроллеров за одно и то же свойство (проверено:
-// при быстром скролле, догоняющем entrance ещё в процессе, оба тsuccess пишут в transform в одном
-// тике и визуально "дёргают" друг друга) — yPercent entrance никогда не трогает, конфликта нет.
-(function () {
-  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
-
-  var section = document.querySelector('.section-services');
-  var imageWrap = document.querySelector('.services_image-wrap');
-  if (!section || !imageWrap) return;
-
-  ScrollTrigger.matchMedia({
-    '(min-width: 992px)': function () {
-      var tl = gsap.timeline({
-        scrollTrigger: {
-          trigger: section,
-          start: 'top top',
-          end: 'bottom bottom',
-          scrub: true
-        }
-      });
-      tl.to(imageWrap, { yPercent: -6, ease: 'none', duration: 0.5 })
-        .to(imageWrap, { duration: 0.5 }); // idle-заглушка: держит yPercent:-6 вторую половину скрола
-
-      return function () {
-        if (tl.scrollTrigger) tl.scrollTrigger.kill();
-        tl.kill();
-        gsap.set(imageWrap, { clearProps: 'transform' });
       };
     }
   });

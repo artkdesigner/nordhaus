@@ -2886,7 +2886,7 @@ figcaption {
   z-index: 1;
   height: 100vh;
   padding-top: var(--_size---150);
-  padding-bottom: var(--_size---10);
+  padding-bottom: var(--_size---150);
   grid-column-gap: var(--_size---10);
   grid-row-gap: var(--_size---10);
   flex-flow: column;
@@ -3208,12 +3208,16 @@ figcaption {
 }
 
 .approach_top {
-  padding-top: var(--_size---150);
+  padding-top: 0;
   text-align: center;
   flex-flow: column;
   justify-content: flex-start;
   align-items: center;
   display: flex;
+}
+
+.approach_top-pin {
+  padding-top: var(--_size---150);
 }
 
 .approach_title {
@@ -3809,6 +3813,7 @@ figcaption {
     padding-left: var(--_size---10);
   }.quiet_inner {
     padding-top: var(--_size---70);
+    padding-bottom: var(--_size---70);
   }.silence_inner {
     padding-right: var(--_size---10);
     padding-left: var(--_size---10);
@@ -3872,6 +3877,10 @@ figcaption {
     grid-column-gap: var(--_size---50);
     grid-row-gap: var(--_size---50);
   }.approach_top {
+    padding-top: 0;
+  }
+
+  .approach_top-pin {
     padding-top: var(--_size---70);
   }.approach_title {
     letter-spacing: -.16875rem;
