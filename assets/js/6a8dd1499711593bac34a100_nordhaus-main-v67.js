@@ -213,8 +213,13 @@
   var echoSection = document.querySelector('.section_echo');
   var echoSlide0Active = true;
 
+  // 2026-08-25 (фикс бага): .navbar_project-link (Silence/Horizon/Echo/Quiet Geometry/Studio/
+  // contacts) и .menu-btn имеют СВОЙ явный color в CSS (var(--text-light-primary)) — собственное
+  // объявленное свойство элемента не наследуется от родителя, поэтому inline color, который JS
+  // ставит только на .navbar, до них не доходил, и они не меняли цвет вместе с остальным navbar.
+  // Добавлены в colorTargets, чтобы JS явно ставил им тот же inline color.
   var colorTargets = [navbar].concat(
-    Array.prototype.slice.call(navbar.querySelectorAll('.navbar_link, .navbar_logo'))
+    Array.prototype.slice.call(navbar.querySelectorAll('.navbar_link, .navbar_logo, .navbar_project-link, .menu-btn'))
   );
 
   var DARK = '#252525';
