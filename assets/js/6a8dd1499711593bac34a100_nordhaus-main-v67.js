@@ -191,6 +191,10 @@
         if (typeof ScrollTrigger !== 'undefined') ScrollTrigger.refresh();
         requestAnimationFrame(function () {
           var offset = target.getBoundingClientRect().top + window.scrollY;
+          // data-scroll-extra-vh: доп. скрол сверх позиции таргета (напр. Read more -> #idea,
+          // +50vh по прямому запросу, чтобы не просто доехать до верха секции, а укатиться внутрь неё).
+          var extraVh = link.getAttribute('data-scroll-extra-vh');
+          if (extraVh !== null) offset += parseFloat(extraVh) / 100 * window.innerHeight;
           lenis.scrollTo(offset, scrollOpts);
         });
       });
