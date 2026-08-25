@@ -1,0 +1,1341 @@
+// Прелоудер — полноэкранный блок (.preloader, data-preloader) с процентом загрузки в правом
+// нижнем углу (.preloader_percent, data-preloader-percent), добавлено 2026-08-25. Структура —
+// нативные Designer-элементы (не HTML-embed), чтобы стили было удобно менять прямо в Designer.
+// Логика: пока страница грузится, цифра плавно едет к 90% (fake progress, чтобы не залипать на
+// 0%, если загрузка долгая) — реальное окончание загрузки (window 'load', ждёт ВСЕ ресурсы:
+// картинки/видео/шрифты) обрывает fake-tween и быстро дотягивает до 100%, после чего блок УЕЗЖАЕТ
+// ВНИЗ (yPercent:0->100, 1с, БЕЗ opacity — 2026-08-25, по прямому запросу "не растворяется, а
+// уезжает вниз") и скрывается (display:none, чтобы не блокировать клики после исчезновения).
+// Уезд запускается ТОЛЬКО после реальной полной загрузки сайта (в onComplete тика 100%, который
+// сам стартует только из window 'load' / readyState==='complete') — не раньше.
+// **2026-08-25: формат 000-100 + поцифровая "одометр"-анимация** (по прямому запросу) — вместо
+// textContent строим на лету 3 "слота" (по одному на разряд), каждый — overflow:hidden окно
+// высотой 1em, внутри — вертикальная лента из 10 цифр 0..9 (display:flex;flex-direction:column).
+// Чтобы показать цифру N, лента сдвигается на translateY(-N em) — т.к. каждая цифра ровно 1em
+// высотой, N*1em точно совмещает нужную цифру с окном. Именно поэтому "прошлая цифра уходит
+// вверх, следующая приезжает снизу" получается естественно: рост N сдвигает ленту ВВЕРХ, открывая
+// следующую цифру снизу — тот же принцип, что у реального механического одометра. em-based (не
+// px) — подстраивается под font-size из Designer (сейчас 8rem) без JS-измерений. Слоты/ленты —
+// рантайм-структура внутри .preloader_percent (сам класс/его font-size/color/line-height из
+// Designer не трогаем, только заменяем innerHTML на цифровые span'ы, которые наследуют шрифт).
+// Анимация конкретного разряда запускается только когда его цифра РЕАЛЬНО меняется (не на каждый
+// кадр tween'а прогресса) — иначе на каждый кадр спамились бы новые твины.
+(function () {
+  if (typeof gsap === 'undefined') return;
+
+  var preloader = document.querySelector('[data-preloader]');
+  var percentEl = document.querySelector('[data-preloader-percent]');
+  if (!preloader || !percentEl) return;
+
+  var DIGIT_COUNT = 3;
+  var strips = [];
+  var lastDigits = [];
+
+  percentEl.innerHTML = '';
+  percentEl.style.display = 'inline-flex';
+
+  for (var i = 0; i < DIGIT_COUNT; i++) {
+    var slot = document.createElement('span');
+    slot.style.display = 'inline-block';
+    slot.style.overflow = 'hidden';
+    slot.style.height = '1em';
+    slot.style.verticalAlign = 'top';
+
+    var strip = document.createElement('span');
+    strip.style.display = 'flex';
+    strip.style.flexDirection = 'column';
+
+    for (var d = 0; d <= 9; d++) {
+      var digitEl = document.createElement('span');
+      digitEl.style.height = '1em';
+      digitEl.style.lineHeight = '1em';
+      digitEl.textContent = String(d);
+      strip.appendChild(digitEl);
+    }
+
+    slot.appendChild(strip);
+    percentEl.appendChild(slot);
+    strips.push(strip);
+    lastDigits.push('0');
+  }
+
+  var progress = { value: 0 };
+
+  function render() {
+    var str = String(Math.round(progress.value)).padStart(DIGIT_COUNT, '0');
+    for (var i = 0; i < DIGIT_COUNT; i++) {
+      var digit = str[i];
+      if (digit !== lastDigits[i]) {
+        lastDigits[i] = digit;
+        gsap.to(strips[i], { y: (-parseInt(digit, 10)) + 'em', duration: 0.35, ease: 'power2.out' });
+      }
+    }
+  }
+
+  var fakeTween = gsap.to(progress, {
+    value: 90,
+    duration: 4,
+    ease: 'power1.out',
+    onUpdate: render
+  });
+
+  function finish() {
+    fakeTween.kill();
+    gsap.to(progress, {
+      value: 100,
+      duration: 0.4,
+      ease: 'power1.out',
+      onUpdate: render,
+      onComplete: function () {
+        gsap.to(preloader, {
+          yPercent: 100,
+          duration: 1,
+          delay: 0.2,
+          ease: 'power2.inOut',
+          onComplete: function () {
+            preloader.style.display = 'none';
+          }
+        });
+      }
+    });
+  }
+
+  if (document.readyState === 'complete') {
+    finish();
+  } else {
+    window.addEventListener('load', finish);
+  }
+})();
+
+// Кастомная обработка якорных ссылок (замена Lenis anchors:true)
+// **2026-08-25: явные duration/easing на каждый scrollTo()** — раньше эти клики полагались на
+// инстанс-дефолт Lenis (duration:1.2), который убрали из конфига (см. head), чтобы наконец-то
+// заработал lerp при скроле колесом (см. gotcha про Lenis ниже) — без этой правки клики стали бы
+// молча наследовать новый lerp:0.1 и вести себя иначе (не мгновенный duration-джамп, а
+// накатывающееся приближение). Те же duration:0.8/easeOutCubic, что уже используются в клике
+// слайдера — единообразно по сайту.
+(function () {
+  var links = document.querySelectorAll('a[href^="#"]:not([href="#"])');
+  if (!links.length) return;
+
+  var scrollOpts = {
+    duration: 0.8,
+    easing: function (t) { return 1 - Math.pow(1 - t, 3); }
+  };
+
+  function withLenis(cb) {
+    if (!window.lenis) {
+      requestAnimationFrame(function () { withLenis(cb); });
+      return;
+    }
+    cb(window.lenis);
+  }
+
+  links.forEach(function (link) {
+    link.addEventListener('click', function (e) {
+      e.preventDefault();
+
+      withLenis(function (lenis) {
+        var vh = link.getAttribute('data-scroll-vh');
+        if (vh !== null) {
+          lenis.scrollTo(parseFloat(vh) / 100 * window.innerHeight, scrollOpts);
+          return;
+        }
+
+        var id = link.getAttribute('href').slice(1);
+        var target = document.getElementById(id);
+        if (!target) return;
+
+        if (typeof ScrollTrigger !== 'undefined') ScrollTrigger.refresh();
+        requestAnimationFrame(function () {
+          var offset = target.getBoundingClientRect().top + window.scrollY;
+          lenis.scrollTo(offset, scrollOpts);
+        });
+      });
+    });
+  });
+})();
+
+// Смена цвета текста navbar над опредёнными секциями (.navbar-dark-trigger).
+// Echo — особый случай: у него 3 слайда, переключающихся БЕЗ смены положения на странице
+// (echo_bg-img просто наезжают друг на друга по xPercent), поэтому обычная проверка
+// "элемент вошёл в верхнюю полосу вьюпорта" не может различить слайды между собой.
+// Нужен активный флаг echoSlide0Active (см. window.__setEchoSlide0Active ниже, дёргается
+// из setupEchoSlides по onEnter/onLeaveBack): тёмный navbar над echo — только пока активен
+// именно 1-й слайд, светлый — на 2-м и 3-м.
+(function () {
+  var navbar = document.querySelector('.navbar');
+  var triggers = Array.prototype.slice.call(document.querySelectorAll('.section-philosophy, .section_horizon, .section_quiet, .section-idea, .section-services, .navbar-dark-trigger'));
+  if (!navbar || !triggers.length) return;
+
+  var echoSection = document.querySelector('.section_echo');
+  var echoSlide0Active = true;
+
+  var colorTargets = [navbar].concat(
+    Array.prototype.slice.call(navbar.querySelectorAll('.navbar_link, .navbar_logo'))
+  );
+
+  var DARK = '#252525';
+  var isDarkState = null;
+
+  function setDark(isDark) {
+    if (isDark === isDarkState) return;
+    isDarkState = isDark;
+    colorTargets.forEach(function (el) {
+      el.style.color = isDark ? DARK : '';
+    });
+  }
+
+  function update() {
+    var navHeight = navbar.getBoundingClientRect().height;
+    var isDark = triggers.some(function (el) {
+      var r = el.getBoundingClientRect();
+      return r.top <= navHeight && r.bottom >= 0;
+    });
+    if (!isDark && echoSection && echoSlide0Active) {
+      var er = echoSection.getBoundingClientRect();
+      isDark = er.top <= navHeight && er.bottom >= 0;
+    }
+    setDark(isDark);
+  }
+
+  window.__setEchoSlide0Active = function (isActive) {
+    echoSlide0Active = isActive;
+    update();
+  };
+
+  window.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('resize', update);
+  update();
+})();
+
+// Все анимации ниже — на GSAP + ScrollTrigger.
+// ВАЖНО: элементы ниже НЕ должны иметь свой CSS transform в Designer —
+// GSAP должен полностью владеть transform с самого первого gsap.set(),
+// иначе он компонует новый translate()/scale() поверх CSS-класса вместо замены.
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+  gsap.registerPlugin(ScrollTrigger);
+
+  function bindLenis() {
+    if (!window.lenis) {
+      requestAnimationFrame(bindLenis);
+      return;
+    }
+    window.lenis.on('scroll', ScrollTrigger.update);
+    ScrollTrigger.refresh();
+  }
+  bindLenis();
+
+  window.addEventListener('load', function () {
+    ScrollTrigger.refresh();
+  });
+
+  // Наезд philosophy на hero: цвет фона hero и скейл/opacity видео по скролу
+  (function () {
+    var philosophy = document.querySelector('.section-philosophy');
+    var heroPin = document.querySelector('.hero_pin');
+    var heroVideo = document.querySelector('.hero_video');
+    if (!philosophy || !heroPin || !heroVideo) return;
+
+    var TARGET_COLOR = { r: 0x25, g: 0x25, b: 0x25 };
+    var MIN_SCALE = 0.25;
+    var MIN_OPACITY = 0.25;
+    var fromColor = null;
+
+    function parseColor(str) {
+      var m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+      if (!m) return null;
+      var a = m[4] === undefined ? 1 : parseFloat(m[4]);
+      if (a === 0) return null;
+      return { r: +m[1], g: +m[2], b: +m[3] };
+    }
+
+    function getFromColor() {
+      if (fromColor) return fromColor;
+      var el = heroPin;
+      while (el) {
+        var c = parseColor(getComputedStyle(el).backgroundColor);
+        if (c) { fromColor = c; return fromColor; }
+        el = el.parentElement;
+      }
+      fromColor = { r: 255, g: 255, b: 255 };
+      return fromColor;
+    }
+
+    gsap.set(heroVideo, { scale: 1, opacity: 1 });
+
+    ScrollTrigger.create({
+      trigger: philosophy,
+      start: 'top bottom',
+      end: 'top top',
+      scrub: true,
+      onUpdate: function (self) {
+        var progress = self.progress;
+        var from = getFromColor();
+        var r = Math.round(from.r + (TARGET_COLOR.r - from.r) * progress);
+        var g = Math.round(from.g + (TARGET_COLOR.g - from.g) * progress);
+        var b = Math.round(from.b + (TARGET_COLOR.b - from.b) * progress);
+        heroPin.style.backgroundColor = 'rgb(' + r + ',' + g + ',' + b + ')';
+
+        var scale = 1 - progress * (1 - MIN_SCALE);
+        var opacity = 1 - progress * (1 - MIN_OPACITY);
+        gsap.set(heroVideo, { scale: scale, opacity: opacity });
+      }
+    });
+  })();
+
+  // Philosophy: reveal контента — сначала прямые дети .philosophy_top (.philosophy_top-left,
+  // .philosophy_top-right), затем прямые дети .philosophy_bottom (6x .bottom_row — тот же класс,
+  // что и в Idea, поэтому селектор СКОУПЛЕН через '.philosophy_bottom .bottom_row', не глобальный).
+  // Добавлено 2026-08-25 по прямому запросу. Обе группы — обратимые played timeline (slide-up 2rem
+  // + opacity, duration:0.6, ease:power2.out, stagger:0.1 внутри группы), триггер на самом
+  // контейнере группы, 'top 50%' ("когда находятся на середине экрана"). Группа (2) гейтится на
+  // завершение группы (1) — тот же безопасный played-timeline gating handshake (titleRevealed/
+  // textEntered-стиль), что уже используется для Idea (title-wrap -> text-wrap -> bottom_row) и
+  // Founder (title -> img-wrap -> footer): played-таймлайны можно безопасно гейтить, scrub — нет
+  // (см. историю багов у Idea text-wrap выше).
+  (function () {
+    if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+    var top = document.querySelector('.philosophy_top');
+    var bottom = document.querySelector('.philosophy_bottom');
+    if (!top || !bottom) return;
+
+    var topItems = Array.prototype.slice.call(top.children);
+    var bottomItems = Array.prototype.slice.call(bottom.querySelectorAll('.bottom_row'));
+    if (!topItems.length || !bottomItems.length) return;
+
+    gsap.set(topItems, { y: '2rem', opacity: 0 });
+    gsap.set(bottomItems, { y: '2rem', opacity: 0 });
+
+    var topRevealed = false;
+    var bottomEntered = false;
+
+    var bottomTl = gsap.timeline({ paused: true });
+    bottomTl.to(bottomItems, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out', stagger: 0.1 });
+
+    var topTl = gsap.timeline({
+      paused: true,
+      onComplete: function () {
+        topRevealed = true;
+        if (bottomEntered) bottomTl.play();
+      },
+      onReverseComplete: function () { topRevealed = false; }
+    });
+    topTl.to(topItems, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out', stagger: 0.1 });
+
+    ScrollTrigger.create({
+      trigger: top,
+      start: 'top 50%',
+      onEnter: function () { topTl.play(); },
+      onLeaveBack: function () { topTl.reverse(); }
+    });
+
+    ScrollTrigger.create({
+      trigger: bottom,
+      start: 'top 50%',
+      onEnter: function () {
+        bottomEntered = true;
+        if (topRevealed) bottomTl.play();
+      },
+      onLeaveBack: function () {
+        bottomEntered = false;
+        bottomTl.reverse();
+      }
+    });
+  })();
+
+  // Наезд projects (и блоков внутри него) друг на друга — тот же приём, что hero→philosophy:
+  // следующий блок наезжает поверх (margin-top:-100vh + z-index в CSS),
+  // а уходящий блок в этот момент тает в opacity:0 по скролу.
+  // **2026-08-25: добавлена 5-я пара — .slider_pin -> .section-news**, по прямому запросу
+  // "уход в opacity:0 по скролу, когда начинает подъезжать следующая секция". .section-news не
+  // была частью цепочки наезда раньше (без z-index/margin-top) — добавили через data_style_tool:
+  // position:relative, z-index:10 (следующий после section-process, последнего в цепочке — z:9),
+  // margin-top:-100vh, background-color:#f7f7f7 (тот же непрозрачный фон, что у остальных секций
+  // цепочки, снят с .section-idea live computed style — иначе News была бы полупрозрачной и не
+  // перекрывала бы Slider визуально). .slider_pin уже был sticky-боксом (та же роль, что
+  // silence_inner/horizon_mask/echo_mask/quiet_inner) — механизм подходит без изменений.
+  (function () {
+    var stages = [
+      { outgoing: '.silence_inner', incoming: '.section_horizon' },
+      { outgoing: '.horizon_mask', incoming: '.section_echo' },
+      { outgoing: '.echo_mask', incoming: '.section_quiet' },
+      { outgoing: '.quiet_inner', incoming: '.section-idea' },
+      { outgoing: '.slider_pin', incoming: '.section-news' }
+    ];
+
+    stages.forEach(function (s) {
+      var outgoing = document.querySelector(s.outgoing);
+      var incoming = document.querySelector(s.incoming);
+      if (!outgoing || !incoming) return;
+
+      gsap.set(outgoing, { opacity: 1 });
+
+      ScrollTrigger.create({
+        trigger: incoming,
+        start: 'top bottom',
+        end: 'top top',
+        scrub: true,
+        onUpdate: function (self) {
+          gsap.set(outgoing, { opacity: 1 - self.progress });
+        }
+      });
+    });
+  })();
+
+  // Projects: horizon — слайды "cover": прошлый остаётся на месте, новый наезжает поверх.
+  // Смена слайда — отдельная анимация с длительностью/easing, НЕ привязанная к скроллу
+  // (ScrollTrigger только даёт сигнал "въехали в зону" / "вышли из зоны").
+  // **2026-08-25: добавлен exit-сдвиг** — уходящий (предыдущий) slides[i-1] одновременно с
+  // приездом нового slide тоже анимируется, yPercent:0 -> -10 (сдвиг ВВЕРХ на 10% своей высоты),
+  // назад — 0 при onLeaveBack. По прямому запросу, тот же принцип, что и у slider_img/echo_bg-img
+  // (см. ниже), только по вертикали вместо горизонтали — здесь GSAP-tween, не CSS-класс.
+  // Начальная расстановка (какой слайд виден) — СРАЗУ при загрузке (см. вызов ниже), чтобы не было
+  // вспышки "естественного" DOM-порядка. Триггеры смены слайдов — только после reveal-mask анимации.
+  function initHorizonSlides() {
+    var slides = Array.prototype.slice.call(document.querySelectorAll('.horizon_img'));
+    if (slides.length < 2) return;
+    gsap.set(slides[0], { yPercent: 0 });
+    slides.slice(1).forEach(function (slide) {
+      gsap.set(slide, { yPercent: 100 });
+    });
+  }
+  initHorizonSlides();
+
+  function setupHorizonSlides() {
+    var section = document.querySelector('.section_horizon');
+    var slides = Array.prototype.slice.call(document.querySelectorAll('.horizon_img'));
+    if (!section || slides.length < 2) return;
+
+    slides.forEach(function (slide, i) {
+      if (i === 0) return; // первый слайд уже виден изначально
+
+      ScrollTrigger.create({
+        trigger: section,
+        start: function () { return 'top+=' + ((i - 1) * window.innerHeight + 0.75 * window.innerHeight) + ' top'; },
+        onEnter: function () {
+          gsap.to(slide, { yPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
+          gsap.to(slides[i - 1], { yPercent: -10, duration: 1, ease: 'power2.inOut', overwrite: true });
+        },
+        onLeaveBack: function () {
+          gsap.to(slide, { yPercent: 100, duration: 1, ease: 'power2.inOut', overwrite: true });
+          gsap.to(slides[i - 1], { yPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
+        }
+      });
+    });
+  }
+
+  // Projects: echo — слайды "cover" синхронно в echo_bg-slider и echo_slider.
+  // Смена слайда — отдельная анимация с длительностью/easing, НЕ привязанная к скроллу.
+  // **2026-08-25: добавлен exit-сдвиг ТОЛЬКО для echo_bg-img** (не для echo_slider-img/cardSlide)
+  // — уходящий bgSlides[i-1] одновременно с приездом нового bgSlide анимируется отдельным
+  // gsap.to(), xPercent:0 -> -10 (сдвиг влево на 10% своей ширины), назад — 0 при onLeaveBack. По
+  // прямому запросу, "такой же эффект" как у slider_img.
+  // Начальная расстановка — СРАЗУ при загрузке (см. вызов ниже). Триггеры смены слайдов — только
+  // после reveal-mask анимации (см. ниже) — вызывается из неё.
+  function initEchoSlides() {
+    var bgSlides = Array.prototype.slice.call(document.querySelectorAll('.echo_bg-img'));
+    var cardSlides = Array.prototype.slice.call(document.querySelectorAll('.echo_slider-img'));
+    if (bgSlides.length < 2 || cardSlides.length < 2) return;
+    var count = Math.min(bgSlides.length, cardSlides.length);
+    gsap.set(bgSlides[0], { xPercent: 0 });
+    gsap.set(cardSlides[0], { xPercent: 0 });
+    for (var j = 1; j < count; j++) {
+      gsap.set(bgSlides[j], { xPercent: 100 });
+      gsap.set(cardSlides[j], { xPercent: 100 });
+    }
+  }
+  initEchoSlides();
+
+  function setupEchoSlides() {
+    var section = document.querySelector('.section_echo');
+    var bgSlides = Array.prototype.slice.call(document.querySelectorAll('.echo_bg-img'));
+    var cardSlides = Array.prototype.slice.call(document.querySelectorAll('.echo_slider-img'));
+    if (!section || bgSlides.length < 2 || cardSlides.length < 2) return;
+
+    var count = Math.min(bgSlides.length, cardSlides.length);
+
+    for (var i = 1; i < count; i++) {
+      (function (i) {
+        var bgSlide = bgSlides[i];
+        var cardSlide = cardSlides[i];
+
+        ScrollTrigger.create({
+          trigger: section,
+          start: function () { return 'top+=' + ((i - 1) * window.innerHeight + 0.75 * window.innerHeight) + ' top'; },
+          onEnter: function () {
+            gsap.to(cardSlide, { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
+            gsap.to(bgSlide, { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
+            gsap.to(bgSlides[i - 1], { xPercent: -10, duration: 1, ease: 'power2.inOut', overwrite: true });
+            if (i === 1 && window.__setEchoSlide0Active) window.__setEchoSlide0Active(false);
+          },
+          onLeaveBack: function () {
+            gsap.to(cardSlide, { xPercent: 100, duration: 1, ease: 'power2.inOut', overwrite: true });
+            gsap.to(bgSlide, { xPercent: 100, duration: 1, ease: 'power2.inOut', overwrite: true });
+            gsap.to(bgSlides[i - 1], { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
+            if (i === 1 && window.__setEchoSlide0Active) window.__setEchoSlide0Active(true);
+          }
+        });
+      })(i);
+    }
+  }
+
+  // Projects: появление контента всех 4 блоков через маску (scale снизу вверх), НЕ по скролу —
+  // time-based анимация, срабатывает когда секция видна на 90vh экрана (top доходит до 10%
+  // высоты вьюпорта) и ОБРАТИМА: при скроле назад маска прячется обратно (onLeaveBack).
+  // Маска — сам sticky-бокс с видимым контентом (silence_inner/horizon_mask/echo_mask/quiet_inner),
+  // контент — его прямые дети, получающие обратный scale, чтобы визуально не растягиваться вместе с маской.
+  // Для horizon/echo — триггеры смены слайдов регистрируются только ОДИН раз, после первого
+  // завершения анимации (slidesReady-флаг защищает от повторной регистрации при скроле туда-сюда).
+  (function () {
+    var configs = [
+      { section: '.section_silence', mask: '.silence_inner' },
+      { section: '.section_horizon', mask: '.horizon_mask', afterReveal: setupHorizonSlides },
+      { section: '.section_echo', mask: '.echo_mask', afterReveal: setupEchoSlides },
+      { section: '.section_quiet', mask: '.quiet_inner' }
+    ];
+
+    var DURATION = 1.5; // было 1s, +50% для плавности
+
+    configs.forEach(function (cfg) {
+      var section = document.querySelector(cfg.section);
+      var mask = document.querySelector(cfg.mask);
+      if (!section || !mask) return;
+
+      var content = Array.prototype.slice.call(mask.children);
+      var slidesReady = false;
+
+      gsap.set(mask, { scaleY: 0.001, transformOrigin: 'bottom center' });
+      content.forEach(function (el) {
+        gsap.set(el, { scaleY: 1, transformOrigin: 'bottom center' });
+      });
+
+      function syncContent() {
+        var scale = Math.max(gsap.getProperty(mask, 'scaleY'), 0.001);
+        content.forEach(function (el) {
+          gsap.set(el, { scaleY: 1 / scale });
+        });
+      }
+
+      ScrollTrigger.create({
+        trigger: section,
+        start: 'top 10%',
+        onEnter: function () {
+          gsap.to(mask, {
+            scaleY: 1,
+            duration: DURATION,
+            ease: 'power2.inOut',
+            overwrite: true,
+            onUpdate: syncContent,
+            onComplete: function () {
+              if (cfg.afterReveal && !slidesReady) {
+                slidesReady = true;
+                cfg.afterReveal();
+              }
+            }
+          });
+        },
+        onLeaveBack: function () {
+          gsap.to(mask, {
+            scaleY: 0.001,
+            duration: DURATION,
+            ease: 'power2.inOut',
+            overwrite: true,
+            onUpdate: syncContent
+          });
+        }
+      });
+    });
+  })();
+})();
+
+// Services: поведение секции различается по брейкпоинтам (граница — 992px,
+// совпадает с брейкпоинтом Webflow "medium", где секция теряет pin и превращается
+// в обычный поток — см. .section-services/.services_list-item в стилях).
+// Десктоп (>=992px):
+//   - entrance — paused timeline на top 10% (не scrub), обратимый: onEnter -> play(),
+//     onLeaveBack -> reverse(). Сначала .services_image-wrap растёт из левого нижнего угла
+//     (scale 0.1 -> 1, ease power2.inOut — было scale:0/power3.out, 2026-08-25 сменили по прямому
+//     запросу "слишком резко, неаккуратно" — 0.1 вместо 0 даёт менее дёрганый старт, inOut вместо
+//     резкого out-easing даёт мягкий разгон/торможение), и только после этого по очереди slide-up
+//     (100% своей высоты) + opacity 0 -> 1 появляются .services_list-item — задержка 0.1с.
+//     clearProps по завершении их tween отдаёт opacity/transform обратно классу current из
+//     hover-логики ниже;
+//   - наведение на карточку подсвечивает её и синхронизированное большое фото —
+//     .services_big-img с тем же индексом внутри .services_image-wrap получает current.
+// Планшет/мобилка (<992px): наведения и entrance-эффекта фото нет, карточки появляются по
+// очереди снизу вверх (slide-up) с шагом 0.1с, когда список входит в зону видимости.
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  var section = document.querySelector('.section-services');
+  var list = document.querySelector('.services_list');
+  var imageWrap = document.querySelector('.services_image-wrap');
+  if (!section || !list) return;
+
+  var items = Array.prototype.slice.call(list.querySelectorAll('.services_list-item'));
+  if (!items.length) return;
+
+  ScrollTrigger.matchMedia({
+    '(min-width: 992px)': function () {
+      if (!imageWrap) return;
+      var bigImgs = Array.prototype.slice.call(imageWrap.querySelectorAll('.services_big-img'));
+      if (!bigImgs.length) return;
+
+      function setCurrent(index) {
+        items.forEach(function (item, i) {
+          var isCurrent = i === index;
+          item.classList.toggle('current', isCurrent);
+          var itemImg = item.querySelector('.services_list-item-img');
+          if (itemImg) itemImg.classList.toggle('current', isCurrent);
+        });
+        bigImgs.forEach(function (img, i) {
+          img.classList.toggle('current', i === index);
+        });
+      }
+
+      // Наведение на карточки блокируется, пока идёт scale-анимация .services_image-wrap
+      // (0 -> 100%), чтобы hover не переключал current до того, как фото встало на место.
+      var imageWrapReady = false;
+
+      var handlers = items.map(function (item, index) {
+        var handler = function () {
+          if (!imageWrapReady) return;
+          setCurrent(index);
+        };
+        item.addEventListener('mouseenter', handler);
+        return handler;
+      });
+
+      gsap.set(imageWrap, { transformOrigin: 'left bottom' });
+      gsap.set(items, { yPercent: 100, opacity: 0 });
+
+      var entranceTl = gsap.timeline({ paused: true });
+      entranceTl
+        .fromTo(imageWrap, { scale: 0.1 }, {
+          scale: 1,
+          duration: 1.1,
+          ease: 'power2.inOut',
+          onStart: function () { imageWrapReady = false; },
+          onComplete: function () { imageWrapReady = true; },
+          onReverseComplete: function () { imageWrapReady = false; }
+        })
+        .to(items, {
+          yPercent: 0,
+          opacity: 1,
+          duration: 0.6,
+          ease: 'power2.out',
+          stagger: 0.1,
+          clearProps: 'transform,opacity'
+        });
+
+      var entranceTrigger = ScrollTrigger.create({
+        trigger: section,
+        start: 'top 10%',
+        onEnter: function () { entranceTl.play(); },
+        onLeaveBack: function () { entranceTl.reverse(); }
+      });
+
+      return function () {
+        items.forEach(function (item, index) {
+          item.removeEventListener('mouseenter', handlers[index]);
+        });
+        entranceTrigger.kill();
+        entranceTl.kill();
+        gsap.set(imageWrap, { clearProps: 'transform,transformOrigin' });
+        gsap.set(items, { clearProps: 'transform,opacity' });
+      };
+    },
+
+    '(max-width: 991px)': function () {
+      gsap.set(items, { y: '2rem', opacity: 0 });
+
+      var trigger = ScrollTrigger.create({
+        trigger: list,
+        start: 'top 85%',
+        once: true,
+        onEnter: function () {
+          gsap.to(items, {
+            y: 0,
+            opacity: 1,
+            duration: 0.6,
+            ease: 'power2.out',
+            stagger: 0.1,
+            overwrite: true
+          });
+        }
+      });
+
+      return function () {
+        trigger.kill();
+        gsap.set(items, { clearProps: 'transform,opacity' });
+      };
+    }
+  });
+})();
+
+// Idea: reveal контента секции. Секция осталась плавным потоком (без явной высоты) —
+// предыдущая версия с .idea_title-pin/-runway была откачена: overflow:hidden 100vh-бокс обрезал
+// двухстрочный заголовок (огромный font-size), а 250vh раннвея создавали пустой провал в скроле.
+// 1) **2026-08-25: больше НЕ scrub** — по прямому запросу отказались от завязки на скрол для
+//    .idea_title-wrap. Теперь это обычный обратимый paused timeline (onEnter -> play(),
+//    onLeaveBack -> reverse()), триггер — .idea_top (обёртка вокруг title-wrap'ов и
+//    top-text-wrap'ов) достигает top 90% экрана. 4 .idea_title-wrap выезжают снизу экрана на свою
+//    позицию, одновременно играет анимация .idea_title: подъём + раскрытие через маску (сам
+//    .idea_title — overflow:hidden окно, обёрнутый вокруг текста .idea_title-inner выезжает по Y)
+//    — задержка 0.1с, duration 2с, ease power2.out (было ease:'none' под scrub — на played
+//    timeline это выглядело бы линейно-механически, поэтому сменили на обычный power2.out, как в
+//    остальных played-реувилах сайта).
+// 2) .idea_top-text-wrap — **2026-08-25: переведено со scrub на played (второй раз за день)**.
+//    История: сначала это был scrub-таймлайн на section (top 60% -> +=120%). Добавили гейтинг
+//    (флаг titleRevealed) поверх scrub — привело к "мгновенному впрыгиванию" при быстром скроле
+//    (см. предыдущую версию этого комментария в истории файла) — убрали гейтинг, оставили чистый
+//    scrub. НО пользователь сообщил СНОВА тем же днём о двух проблемах с чистым scrub: (a) снова
+//    иногда стартует до завершения title-wrap (ожидаемо — без гейтинга это лишь "обычно, но не
+//    гарантированно" совпадает по времени, та же формулировка, что и раньше), и (b) opacity
+//    "зависает" неполной, если не доскроллить ровно до конца диапазона +=120% — врождённое
+//    свойство scrub (он не "проигрывается", а жёстко привязан к текущей позиции скрола).
+//    ПРАВИЛЬНОЕ решение — не чинить scrub, а перевести .idea_top-text-wrap на played reversible
+//    timeline (как .bottom_row ниже), потому что: (a) played-таймлайн ВСЕГДА доигрывает до
+//    opacity:1 полностью, независимо от того, докуда доскроллил пользователь — решает проблему
+//    (b); (b) гейтинг played-таймлайна БЕЗОПАСЕН (в отличие от гейтинга scrub) — .play() плавно
+//    анимирует из текущего состояния, не "впрыгивает" — тот же принцип, что уже работает в Founder
+//    (title -> img-wrap -> footer, imgWrapRevealed) и Services (imageWrapReady). Поэтому гейтинг
+//    вернули, но теперь на played-механике: флаг titleRevealed выставляется в titleTl
+//    onComplete/onReverseComplete; textTl.play() вызывается либо сразу в onEnter (если title уже
+//    готов), либо из titleTl.onComplete (если text-wrap's onEnter сработал раньше — тогда просто
+//    ставится флаг textEntered=true и ждёт).
+// 3) .bottom_row (внутри .idea_bottom) — вынесены из scrub-таймлайна группы (2) в СВОИ отдельные
+//    реувилы, по прямому запросу — каждый `.bottom_row` получает независимый обратимый timeline
+//    (duration 0.6, ease power2.out), триггер на САМОМ СЕБЕ, top 60%. Reversible: onEnter ->
+//    play(), onLeaveBack -> reverse(). **2026-08-25: добавлен гейтинг на textRevealed** — по
+//    жалобе "элементы внутри idea_bottom появляются раньше чем idea_top-text-wrap" (естественного
+//    отступа между точками триггеров оказалось недостаточно). Флаг textRevealed выставляется в
+//    onComplete/onReverseComplete группы (2) (textTl); если строка входит в зону раньше, чем текст
+//    доиграл, она не проигрывается сразу, а кладётся в массив pendingRows — textTl.onComplete
+//    проигрывает все накопленные pendingRows разом и очищает массив. При скроле назад строка
+//    убирается из pendingRows (если ещё не проигралась) и себя же реверсит. Тот же безопасный
+//    паттерн, что и text-wrap/title-wrap гейтинг выше — гейтинг played-таймлайна безопасен
+//    (в отличие от гейтинга scrub, см. историю выше).
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  var section = document.querySelector('.section-idea');
+  if (!section) return;
+
+  var ideaTop = section.querySelector('.idea_top');
+  var titleWraps = Array.prototype.slice.call(section.querySelectorAll('.idea_title-wrap'));
+  var titles = Array.prototype.slice.call(section.querySelectorAll('.idea_title'));
+  var textWraps = Array.prototype.slice.call(section.querySelectorAll('.idea_top-text-wrap'));
+  var rows = Array.prototype.slice.call(section.querySelectorAll('.bottom_row'));
+  if (!titles.length) return;
+
+  var titleInners = titles.map(function (title) {
+    var inner = document.createElement('div');
+    inner.className = 'idea_title-inner';
+    while (title.firstChild) inner.appendChild(title.firstChild);
+    title.appendChild(inner);
+    title.style.overflow = 'hidden';
+    return inner;
+  });
+
+  gsap.set(titleWraps, { y: '100vh' });
+  gsap.set(titles, { y: '4rem', opacity: 0 });
+  gsap.set(titleInners, { yPercent: 100 });
+  gsap.set(textWraps, { y: '2rem', opacity: 0 });
+  gsap.set(rows, { y: '2rem', opacity: 0 });
+
+  var titleRevealed = false;
+  var textEntered = false;
+  var textRevealed = false;
+  var pendingRows = [];
+
+  var textTl = gsap.timeline({
+    paused: true,
+    onComplete: function () {
+      textRevealed = true;
+      pendingRows.forEach(function (rowTl) { rowTl.play(); });
+      pendingRows = [];
+    },
+    onReverseComplete: function () { textRevealed = false; }
+  });
+  textTl.to(textWraps, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out', stagger: 0.1 });
+
+  var titleTl = gsap.timeline({
+    paused: true,
+    onComplete: function () {
+      titleRevealed = true;
+      if (textEntered) textTl.play();
+    },
+    onReverseComplete: function () { titleRevealed = false; }
+  });
+  titleTl
+    .to(titleWraps, { y: 0, duration: 2, ease: 'power2.out', stagger: 0.1 })
+    .to(titles, { y: 0, opacity: 1, duration: 2, ease: 'power2.out', stagger: 0.1 }, '<')
+    .to(titleInners, { yPercent: 0, duration: 2, ease: 'power2.out', stagger: 0.1 }, '<');
+
+  if (ideaTop) {
+    ScrollTrigger.create({
+      trigger: ideaTop,
+      start: 'top 90%',
+      onEnter: function () { titleTl.play(); },
+      onLeaveBack: function () { titleTl.reverse(); }
+    });
+  }
+
+  ScrollTrigger.create({
+    trigger: section,
+    start: 'top 60%',
+    onEnter: function () {
+      textEntered = true;
+      if (titleRevealed) textTl.play();
+    },
+    onLeaveBack: function () {
+      textEntered = false;
+      textTl.reverse();
+    }
+  });
+
+  rows.forEach(function (row) {
+    var rowTl = gsap.timeline({ paused: true });
+    rowTl.to(row, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out' });
+
+    ScrollTrigger.create({
+      trigger: row,
+      start: 'top 60%',
+      onEnter: function () {
+        if (textRevealed) {
+          rowTl.play();
+        } else if (pendingRows.indexOf(rowTl) === -1) {
+          pendingRows.push(rowTl);
+        }
+      },
+      onLeaveBack: function () {
+        var idx = pendingRows.indexOf(rowTl);
+        if (idx !== -1) pendingRows.splice(idx, 1);
+        rowTl.reverse();
+      }
+    });
+  });
+})();
+
+// Process наезжает на services тем же приёмом, что и раньше в цепочке секций
+// (margin-top:-100vh + z-index — см. .section-process в стилях). Пока идёт наезд (top секции
+// process от низа до верха вьюпорта), поверх .services_pin растёт затемняющий оверлей
+// #252525 — из 0% в 50% opacity. Оверлей — обычный div, создаётся здесь же в рантайме,
+// т.к. в Designer под это отдельного элемента нет.
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  var processSection = document.querySelector('.section-process');
+  var servicesPin = document.querySelector('.services_pin');
+  if (!processSection || !servicesPin) return;
+
+  var overlay = document.createElement('div');
+  overlay.className = 'services_darken-overlay';
+  overlay.style.position = 'absolute';
+  overlay.style.inset = '0';
+  overlay.style.backgroundColor = '#252525';
+  overlay.style.opacity = '0';
+  overlay.style.pointerEvents = 'none';
+  servicesPin.appendChild(overlay);
+
+  ScrollTrigger.create({
+    trigger: processSection,
+    start: 'top bottom',
+    end: 'top top',
+    scrub: true,
+    onUpdate: function (self) {
+      overlay.style.opacity = String(self.progress * 0.5);
+    }
+  });
+})();
+
+// Process: контент .process_content появляется по очереди (slide-up + opacity) — в DOM-порядке
+// это .process_text-wrap, .process_img, .process_text-wrap — триггер на top 50% (середина
+// экрана), обратимый: onEnter -> play(), onLeaveBack -> reverse() (при скроле назад анимация
+// откатывается). duration/stagger удвоены дважды (0.7->1.4->2.8, 0.15->0.3->0.6) — по двум
+// последовательным запросам замедлить вдвое, элементы появлялись слишком резко.
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  var section = document.querySelector('.section-process');
+  var content = document.querySelector('.process_content');
+  if (!section || !content) return;
+
+  var revealEls = Array.prototype.slice.call(content.children);
+  if (!revealEls.length) return;
+
+  gsap.set(revealEls, { y: '2rem', opacity: 0 });
+
+  var revealTl = gsap.timeline({ paused: true });
+  revealTl.to(revealEls, {
+    y: 0,
+    opacity: 1,
+    duration: 2.8,
+    ease: 'power2.out',
+    stagger: 0.6
+  });
+
+  ScrollTrigger.create({
+    trigger: section,
+    start: 'top 50%',
+    onEnter: function () { revealTl.play(); },
+    onLeaveBack: function () { revealTl.reverse(); }
+  });
+})();
+
+// Approach: 1) .approach_top **2026-08-25: теперь ПИНИТСЯ** — по прямому запросу "сначала
+//    зафиксировался approach_top и внутри проиграла анимация title, потом уже приехали middle и
+//    bottom без фиксации". Реализовано в рантайме (без Designer-элемента, тот же приём, что и
+//    idea_title-inner/services-overlay/founder-mask): дети .approach_top (на деле только
+//    .approach_title) переносятся в новый div.approach_top-pin (position:sticky;top:0;height:100vh;
+//    overflow:hidden), на который также переехали исходные flex/alignment-стили самого
+//    .approach_top (display:flex;flex-direction:column;justify-content:flex-start;
+//    align-items:center;text-align:center — см. гочу про потерю display:grid/flex при переносе
+//    детей в новую sticky-обёртку, применили тот же принцип и к flex). Сам .approach_top становится
+//    рантайм-runway высотой 200vh (100vh под пин + 100vh скрола для дозаполнения текста), display
+//    меняется на block, чтобы не конфликтовать с центрированием 100vh-ребёнка. .approach_title
+//    заполняется побуквенно (opacity 0.25 -> 1) scrub'ом, ПРИВЯЗАННЫМ К RUNWAY (.approach_top,
+//    start:'top top', end:'bottom bottom' — тот же приём, что вращение маски в Founder), а не к
+//    самому titleEl — пока элемент запинен, его собственный bounding rect не двигается, поэтому
+//    trigger:titleEl больше не может scrub'иться (та же причина, по которой это не работает для
+//    любого запиненного контента на сайте). Прогресс заполнения синхронизирован так, что текст
+//    дозаполняется ровно к моменту открепления. 2) прямые дети .approach_middle появляются по
+//    очереди slide-up(2rem) + opacity, задержка 0.2с/длительность 1.2с, обратимый paused timeline
+//    (onEnter -> play(), onLeaveBack -> reverse()), триггер на top 85% самого .approach_middle —
+//    БЕЗ ИЗМЕНЕНИЙ, приезжает обычным потоком уже после того, как approach_top открепился.
+// 3) прямые дети .approach_bottom (.approach_circle) появляются по очереди slide-up(50% своей
+// высоты через yPercent) + opacity — SCRUB, привязан к позиции скрола (ScrollTrigger start:'top
+// 80%' на самом .approach_bottom, end:'+=60%', stagger 0.2) — БЕЗ ИЗМЕНЕНИЙ.
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  var approachTop = document.querySelector('.approach_top');
+  var middle = document.querySelector('.approach_middle');
+  var bottom = document.querySelector('.approach_bottom');
+
+  if (approachTop) {
+    var pin = document.createElement('div');
+    pin.className = 'approach_top-pin';
+    pin.style.position = 'sticky';
+    pin.style.top = '0';
+    pin.style.height = '100vh';
+    pin.style.width = '100%';
+    pin.style.overflow = 'hidden';
+    pin.style.display = 'flex';
+    pin.style.flexDirection = 'column';
+    pin.style.justifyContent = 'flex-start';
+    pin.style.alignItems = 'center';
+    pin.style.textAlign = 'center';
+
+    while (approachTop.firstChild) pin.appendChild(approachTop.firstChild);
+    approachTop.appendChild(pin);
+
+    approachTop.style.height = '200vh';
+    approachTop.style.display = 'block';
+    approachTop.style.position = 'relative';
+  }
+
+  var titleEl = document.querySelector('.approach_title');
+
+  if (titleEl) {
+    var textNodes = Array.prototype.slice.call(titleEl.childNodes);
+    var chars = [];
+    textNodes.forEach(function (node) {
+      if (node.nodeType !== 3) return;
+      var frag = document.createDocumentFragment();
+      node.textContent.split('').forEach(function (ch) {
+        var span = document.createElement('span');
+        span.className = 'approach_title-char';
+        span.textContent = ch;
+        frag.appendChild(span);
+        chars.push(span);
+      });
+      node.parentNode.replaceChild(frag, node);
+    });
+
+    if (chars.length) {
+      gsap.set(chars, { opacity: 0.25 });
+      gsap.to(chars, {
+        opacity: 1,
+        ease: 'none',
+        stagger: 0.05,
+        scrollTrigger: {
+          trigger: approachTop || titleEl,
+          start: 'top top',
+          end: 'bottom bottom',
+          scrub: true
+        }
+      });
+    }
+  }
+
+  if (middle) {
+    var middleItems = Array.prototype.slice.call(middle.children);
+    if (middleItems.length) {
+      gsap.set(middleItems, { y: '2rem', opacity: 0 });
+
+      var middleTl = gsap.timeline({ paused: true });
+      middleTl.to(middleItems, {
+        y: 0,
+        opacity: 1,
+        duration: 1.2,
+        ease: 'power2.out',
+        stagger: 0.2
+      });
+
+      ScrollTrigger.create({
+        trigger: middle,
+        start: 'top 85%',
+        onEnter: function () { middleTl.play(); },
+        onLeaveBack: function () { middleTl.reverse(); }
+      });
+    }
+  }
+
+  if (bottom) {
+    var bottomItems = Array.prototype.slice.call(bottom.children);
+    if (bottomItems.length) {
+      gsap.set(bottomItems, { yPercent: 50, opacity: 0 });
+
+      gsap.timeline({
+        scrollTrigger: {
+          trigger: bottom,
+          start: 'top 80%',
+          end: '+=60%',
+          scrub: true
+        }
+      }).to(bottomItems, {
+        yPercent: 0,
+        opacity: 1,
+        ease: 'none',
+        stagger: 0.2
+      });
+    }
+  }
+})();
+
+// Slider: смена слайдов по скролу — два независимых набора:
+// 1) .slide-content (внутри .slider_content-grid) — current передаётся ЭКСКЛЮЗИВНО (снимается с
+//    предыдущего элемента при появлении следующего) — это просто dim/undim текстового индикатора
+//    (opacity), не позиционная анимация, менять здесь нечего.
+// 2) .slider_img (внутри .slider_wrapper) — three-state FSM через классы: не пришёл (base,
+//    translate 100%) -> current (0%) -> exited (translate -10%, новый комбо-класс). При onEnter
+//    границы i: у slides[i-1] current МЕНЯЕТСЯ на exited (не накапливается вместе с current —
+//    чистая замена класса, translate -10% симметрично сдвигает уходящий слайд влево ОДНОВРЕМЕННО
+//    с приездом следующего), у slides[i] добавляется current. onLeaveBack — зеркально: current
+//    снимается с i, exited меняется обратно на current у i-1 (возвращается на 0%). **2026-08-25:
+//    exited-класс и его логика добавлены по прямому запросу** ("уходящий слайд смещается влево на
+//    10% одновременно с приездом следующего") — до этого current с предыдущей картинки вообще не
+//    снимался (см. историю ниже), теперь снимается и заменяется на exited.
+// Секция даёт 100vh скрола на слайд + 100vh запаса в конце (высота .section-slider = кол-во
+// слайдов * 100vh + 100vh, иначе 4й слайд приезжал прямо перед тем, как секция начинает открепляться).
+// Переключение — на каждой границе в window.innerHeight, обратимо (onEnter/onLeaveBack), тем же
+// приёмом start-функции с 'top+=Npx top', что и в horizon/echo. Граница 1->2 сдвинута на 50vh
+// раньше остальных (slideOffset(1)) — по прямому запросу. Клик по любому .slide-content
+// доскраливает (через тот же Lenis, что и якорные ссылки) ровно до границы этого слайда — со
+// СВОИМИ duration:0.8/easing (не глобальные lenis-дефолты duration:1.2 + экспоненциальный easing
+// с долгим затухающим хвостом), которые ощущались как медленный переход с задержкой — правка
+// 2026-08-25 по жалобе пользователя.
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  var section = document.querySelector('.section-slider');
+  var contents = Array.prototype.slice.call(document.querySelectorAll('.slider_content-grid .slide-content'));
+  var imgs = Array.prototype.slice.call(document.querySelectorAll('.slider_wrapper .slider_img'));
+  if (!section || contents.length < 2 || imgs.length < 2) return;
+
+  var count = Math.min(contents.length, imgs.length);
+
+  function slideOffset(i) {
+    var vh = window.innerHeight;
+    return i === 1 ? vh * 0.5 : i * vh;
+  }
+
+  for (var i = 1; i < count; i++) {
+    (function (i) {
+      ScrollTrigger.create({
+        trigger: section,
+        start: function () { return 'top+=' + slideOffset(i) + ' top'; },
+        onEnter: function () {
+          contents[i - 1].classList.remove('current');
+          contents[i].classList.add('current');
+          imgs[i - 1].classList.remove('current');
+          imgs[i - 1].classList.add('exited');
+          imgs[i].classList.add('current');
+        },
+        onLeaveBack: function () {
+          contents[i].classList.remove('current');
+          contents[i - 1].classList.add('current');
+          imgs[i].classList.remove('current');
+          imgs[i - 1].classList.remove('exited');
+          imgs[i - 1].classList.add('current');
+        }
+      });
+    })(i);
+  }
+
+  function withLenis(cb) {
+    if (!window.lenis) {
+      requestAnimationFrame(function () { withLenis(cb); });
+      return;
+    }
+    cb(window.lenis);
+  }
+
+  contents.forEach(function (content, j) {
+    content.style.cursor = 'pointer';
+    content.addEventListener('click', function () {
+      withLenis(function (lenis) {
+        var sectionTop = section.getBoundingClientRect().top + window.scrollY;
+        var target = j === 0 ? sectionTop : sectionTop + slideOffset(j) + 2;
+        lenis.scrollTo(target, {
+          duration: 0.8,
+          easing: function (t) { return 1 - Math.pow(1 - t, 3); }
+        });
+      });
+    });
+  });
+})();
+
+// News: .news_title и каждая .news_card появляются по скролу (slide-up 2rem + opacity) на
+// СВОЁМ собственном триггере (top 70% экрана) — независимо друг от друга, без общего stagger,
+// обратимо (onEnter -> play(), onLeaveBack -> reverse()). news_title теперь тоже часть этого
+// набора анимируемых элементов — по прямому запросу.
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  var title = document.querySelector('.section-news .news_title');
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.section-news .news_card'));
+  var elements = (title ? [title] : []).concat(cards);
+  if (!elements.length) return;
+
+  elements.forEach(function (el) {
+    gsap.set(el, { y: '2rem', opacity: 0 });
+
+    var tl = gsap.timeline({ paused: true });
+    tl.to(el, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out' });
+
+    ScrollTrigger.create({
+      trigger: el,
+      start: 'top 70%',
+      onEnter: function () { tl.play(); },
+      onLeaveBack: function () { tl.reverse(); }
+    });
+  });
+})();
+
+// Founder: .founder_img остаётся ПОЛНОСТЬЮ статичным (без единой трансформации, без искажений) —
+// видна только его часть, попадающая под SVG-маску, построенную в рантайме из геометрии двух
+// .founder_mask-circle (сами div-круги теперь прозрачные — чисто геометрический ориентир, JS
+// читает их реальный getBoundingClientRect и на resize пересчитывает). Вращается только
+// содержимое маски (её внутренняя <g transform="rotate(...)">), а не фото и не сами div-круги —
+// именно это "крутит узор и показывает скрытые части неподвижной фотографии", как просили.
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  var section = document.querySelector('.section-founder');
+  var img = document.querySelector('.founder_img');
+  var circles = Array.prototype.slice.call(document.querySelectorAll('.founder_mask-circle'));
+  if (!section || !img || circles.length < 2) return;
+
+  var svgNS = 'http://www.w3.org/2000/svg';
+  var maskId = 'founder-mask-' + Math.random().toString(36).slice(2);
+
+  var svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('width', '0');
+  svg.setAttribute('height', '0');
+  svg.style.position = 'absolute';
+  svg.style.pointerEvents = 'none';
+
+  var mask = document.createElementNS(svgNS, 'mask');
+  mask.setAttribute('id', maskId);
+
+  var group = document.createElementNS(svgNS, 'g');
+  var svgCircles = circles.map(function () {
+    var c = document.createElementNS(svgNS, 'circle');
+    c.setAttribute('fill', '#ffffff');
+    group.appendChild(c);
+    return c;
+  });
+
+  mask.appendChild(group);
+  svg.appendChild(mask);
+  document.body.appendChild(svg);
+
+  img.style.maskImage = 'url(#' + maskId + ')';
+  img.style.webkitMaskImage = 'url(#' + maskId + ')';
+  img.style.maskRepeat = 'no-repeat';
+  img.style.webkitMaskRepeat = 'no-repeat';
+
+  var pivot = { x: 0, y: 0 };
+
+  function layout() {
+    var imgRect = img.getBoundingClientRect();
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    circles.forEach(function (circle, i) {
+      var r = circle.getBoundingClientRect();
+      var cx = r.left + r.width / 2 - imgRect.left;
+      var cy = r.top + r.height / 2 - imgRect.top;
+      var radius = r.width / 2;
+      svgCircles[i].setAttribute('cx', cx);
+      svgCircles[i].setAttribute('cy', cy);
+      svgCircles[i].setAttribute('r', radius);
+      minX = Math.min(minX, cx - radius);
+      maxX = Math.max(maxX, cx + radius);
+      minY = Math.min(minY, cy - radius);
+      maxY = Math.max(maxY, cy + radius);
+    });
+
+    pivot.x = (minX + maxX) / 2;
+    pivot.y = (minY + maxY) / 2;
+  }
+
+  layout();
+  window.addEventListener('resize', layout);
+
+  ScrollTrigger.create({
+    trigger: section,
+    start: 'top top',
+    end: 'bottom bottom',
+    scrub: true,
+    onUpdate: function (self) {
+      var angle = self.progress * 180;
+      group.setAttribute('transform', 'rotate(' + angle + ' ' + pivot.x + ' ' + pivot.y + ')');
+    }
+  });
+})();
+
+// Founder: reveal контента (title -> img-wrap -> footer), добавлено 2026-08-25 по прямому запросу.
+// 1) .founder_title — slide-up(2rem) + opacity, duration:1.2 (удвоено с 0.6 2026-08-25 —
+//    ощущалось слишком резким), обратимый paused timeline, триггер top 70% на самом
+//    .founder_title (onEnter -> play(), onLeaveBack -> reverse() — реверс уже был реализован
+//    изначально, часть той же introTl, что и img-wrap; отдельно проверено и подтверждено рабочим
+//    2026-08-25 по запросу "сделай обратную анимацию для этого заголовка при скроле назад").
+// 2) .founder_img-wrap — opacity + slide-up(yPercent:25->0, 25% ОТ СОБСТВЕННОЙ высоты — не
+//    фиксированный rem/px), играет сразу следом за title ВНУТРИ ТОГО ЖЕ timeline (chained .to(),
+//    без своего отдельного триггера) — соответствует формулировке "а потом .founder_img-wrap".
+//    duration:2.4 (дважды удвоено 2026-08-25: 0.6 -> 1.2 -> 2.4, ощущалось слишком резким/быстрым
+//    оба раза). Проверено через data_style_tool, что у класса нет своего Designer-transform —
+//    yPercent можно применять напрямую (см. gotcha про composited transform в конце файла).
+// 3) .founder_footer — slide-up(2rem) + opacity, свой отдельный обратимый timeline, триггер
+//    top 90% на самом .founder_footer — НО играет только если img-wrap уже закончил появляться:
+//    флаг imgWrapRevealed выставляется в onComplete/onReverseComplete у intro-timeline (title+img-wrap),
+//    footer's onEnter проверяет флаг — если ещё не готов, просто помечает footerEntered=true и
+//    ждёт, пока intro-timeline не выставит флаг и не запустит footer сама (тот же принцип
+//    gating, что и imageWrapReady в Services).
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  var titleEl = document.querySelector('.founder_title');
+  var imgWrap = document.querySelector('.founder_img-wrap');
+  var footerEl = document.querySelector('.founder_footer');
+  if (!titleEl || !imgWrap || !footerEl) return;
+
+  gsap.set(titleEl, { y: '2rem', opacity: 0 });
+  gsap.set(imgWrap, { opacity: 0, yPercent: 25 });
+  gsap.set(footerEl, { y: '2rem', opacity: 0 });
+
+  var imgWrapRevealed = false;
+  var footerEntered = false;
+
+  var footerTl = gsap.timeline({ paused: true });
+  footerTl.to(footerEl, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out' });
+
+  var introTl = gsap.timeline({
+    paused: true,
+    onComplete: function () {
+      imgWrapRevealed = true;
+      if (footerEntered) footerTl.play();
+    },
+    onReverseComplete: function () {
+      imgWrapRevealed = false;
+    }
+  });
+
+  introTl
+    .to(titleEl, { y: 0, opacity: 1, duration: 1.2, ease: 'power2.out' })
+    .to(imgWrap, { opacity: 1, yPercent: 0, duration: 2.4, ease: 'power2.out' });
+
+  ScrollTrigger.create({
+    trigger: titleEl,
+    start: 'top 70%',
+    onEnter: function () { introTl.play(); },
+    onLeaveBack: function () { introTl.reverse(); }
+  });
+
+  ScrollTrigger.create({
+    trigger: footerEl,
+    start: 'top 90%',
+    onEnter: function () {
+      footerEntered = true;
+      if (imgWrapRevealed) footerTl.play();
+    },
+    onLeaveBack: function () {
+      footerEntered = false;
+      footerTl.reverse();
+    }
+  });
+})();
+
+// Footer (.footer, id footer): .footer_left и .footer_contacts (прямые потомки, единственные
+// найденные — по прямому запросу) появляются по очереди slide-up(2rem) + opacity, задержка 0.2с,
+// обратимый paused timeline (onEnter -> play(), onLeaveBack -> reverse()). Добавлено 2026-08-25,
+// триггер менялся 3 раза тем же днём:
+// 1) сначала 'top 50%' (стандартная для сайта viewport-relative формулировка) — оказался
+//    физически недостижим: .footer короткий (~278px, меньше половины вьюпорта), на максимальном
+//    скроле страницы его top не поднимается выше ~69% экрана. Обнаружено через ScrollTrigger
+//    progress, навсегда застрявший на 0.
+// 2) затем 'center bottom' (центр футера достиг низа вьюпорта = видна половина его собственной
+//    высоты) — под формулировку "на половину своей высоты".
+// 3) затем 'bottom bottom' (нижняя граница футера коснулась нижней границы экрана) — по прямому
+//    запросу уточнили именно этот момент. Проблема: это ровно максимально достижимый скролл
+//    страницы (совпадает с концом документа) — граничное значение, которое browser/Lenis не всегда
+//    физически долистывают до последнего пикселя (rounding, lerp-демпфирование не долетает точно
+//    до предела) — пользователь заметил, что анимация не доигрывает до конца.
+// 4) **финально 'bottom 90%'** — та же логика ("нижняя граница футера"), но с запасом: триггер
+//    срабатывает чуть РАНЬШЕ достижения физического предела скролла, а не ровно на нём — надёжно
+//    долистывается при любом реальном скроле.
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  var footer = document.querySelector('.footer');
+  var footerLeft = document.querySelector('.footer_left');
+  var footerContacts = document.querySelector('.footer_contacts');
+  if (!footer || !footerLeft || !footerContacts) return;
+
+  var els = [footerLeft, footerContacts];
+  gsap.set(els, { y: '2rem', opacity: 0 });
+
+  var footerRevealTl = gsap.timeline({ paused: true });
+  footerRevealTl.to(els, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out', stagger: 0.2 });
+
+  ScrollTrigger.create({
+    trigger: footer,
+    start: 'bottom 90%',
+    onEnter: function () { footerRevealTl.play(); },
+    onLeaveBack: function () { footerRevealTl.reverse(); }
+  });
+})();
+
+// Открытие/закрытие мобильного/планшетного меню (.navbar_menu) — menu-btn открывает,
+// navbar_close закрывает; visual-часть (translateX 100%→0) уже задана в стилях через
+// комбо-класс .navbar_menu.opened, здесь только переключение класса.
+(function () {
+  var menuBtn = document.querySelector('.menu-btn');
+  var closeBtn = document.querySelector('.navbar_close');
+  var menu = document.querySelector('.navbar_menu');
+  if (!menuBtn || !closeBtn || !menu) return;
+
+  menuBtn.addEventListener('click', function () {
+    menu.classList.add('opened');
+  });
+
+  closeBtn.addEventListener('click', function () {
+    menu.classList.remove('opened');
+  });
+})();
