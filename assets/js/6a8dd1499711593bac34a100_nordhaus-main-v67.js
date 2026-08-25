@@ -2,12 +2,21 @@
 // нижнем углу (.preloader_percent, data-preloader-percent), добавлено 2026-08-25. Структура —
 // нативные Designer-элементы (не HTML-embed), чтобы стили было удобно менять прямо в Designer.
 // Логика: пока страница грузится, цифра плавно едет к 90% (fake progress, чтобы не залипать на
-// 0%, если загрузка долгая) — реальное окончание загрузки (window 'load', ждёт ВСЕ ресурсы:
-// картинки/видео/шрифты) обрывает fake-tween и быстро дотягивает до 100%, после чего блок УЕЗЖАЕТ
-// ВНИЗ (yPercent:0->100, 1с, БЕЗ opacity — 2026-08-25, по прямому запросу "не растворяется, а
-// уезжает вниз") и скрывается (display:none, чтобы не блокировать клики после исчезновения).
-// Уезд запускается ТОЛЬКО после реальной полной загрузки сайта (в onComplete тика 100%, который
-// сам стартует только из window 'load' / readyState==='complete') — не раньше.
+// 0%, если загрузка долгая) — реальное окончание загрузки обрывает fake-tween и быстро дотягивает
+// до 100%, после чего блок УЕЗЖАЕТ ВНИЗ (yPercent:0->100, 1с, БЕЗ opacity — 2026-08-25, по прямому
+// запросу "не растворяется, а уезжает вниз") и скрывается (display:none, чтобы не блокировать
+// клики после исчезновения). Уезд запускается ТОЛЬКО после реальной полной загрузки сайта.
+// **2026-08-25 (ревизия)**: `window.load` НЕ гарантирует, что весь контент реально загружен — он
+// не ждёт `<img loading="lazy">` (а у нас почти все картинки lazy, т.к. секции далеко за первым
+// экраном при высоте скролла ~28000px) и не блокируется видео-элементами (спецификация не считает
+// `<video>` blocking-ресурсом для load). Поэтому по прямому запросу "прелоудер уходит только после
+// того, как весь контент сайта загружен" ждём явно: window 'load' + document.fonts.ready + КАЖДУЮ
+// картинку (img.complete && naturalWidth>0, иначе слушаем load/error) + КАЖДОЕ видео (readyState>=2
+// / 'loadeddata', иначе слушаем loadeddata/error) — см. whenAllContentLoaded() ниже. readyState>=2
+// ("готов показать кадр"), а НЕ >=4/'canplaythrough' ("докачан до конца") — фоновые видео вне
+// текущей секции браузер может придержать/оборвать их буферизацию, пока секция не видна, так что
+// ждать полной докачки можно неопределённо долго. Есть safety-таймаут 8с (Promise.race), чтобы
+// залипший запрос не заблокировал сайт надолго — не основной триггер, а страховка на сбой сети.
 // **2026-08-25: формат 000-100 + поцифровая "одометр"-анимация** (по прямому запросу) — вместо
 // textContent строим на лету 3 "слота" (по одному на разряд), каждый — overflow:hidden окно
 // высотой 1em, внутри — вертикальная лента из 10 цифр 0..9 (display:flex;flex-direction:column).
@@ -100,11 +109,44 @@
     });
   }
 
-  if (document.readyState === 'complete') {
-    finish();
-  } else {
-    window.addEventListener('load', finish);
+  function whenAllContentLoaded(cb) {
+    var imgs = Array.prototype.slice.call(document.images);
+    var videos = Array.prototype.slice.call(document.querySelectorAll('video'));
+
+    var imgPromises = imgs.map(function (img) {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise(function (resolve) {
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', resolve, { once: true });
+      });
+    });
+
+    // readyState>=2 (HAVE_CURRENT_DATA / 'loadeddata'), не >=4 ('canplaythrough') — фоновые
+    // видео вне текущей секции браузер может придержать/оборвать их буферизацию, пока секция не
+    // видна, и ждать "докачано до конца" можно неопределённо долго. readyState>=2 значит "видео
+    // реально готово показывать кадр", этого достаточно для "контент загружен".
+    var videoPromises = videos.map(function (video) {
+      if (video.readyState >= 2) return Promise.resolve();
+      return new Promise(function (resolve) {
+        video.addEventListener('loadeddata', resolve, { once: true });
+        video.addEventListener('error', resolve, { once: true });
+      });
+    });
+
+    var fontsPromise = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+
+    var windowLoadPromise = new Promise(function (resolve) {
+      if (document.readyState === 'complete') resolve();
+      else window.addEventListener('load', resolve, { once: true });
+    });
+
+    var allLoaded = Promise.all([windowLoadPromise, fontsPromise].concat(imgPromises, videoPromises));
+    var safetyTimeout = new Promise(function (resolve) { setTimeout(resolve, 8000); });
+
+    Promise.race([allLoaded, safetyTimeout]).then(cb);
   }
+
+  whenAllContentLoaded(finish);
 })();
 
 // Кастомная обработка якорных ссылок (замена Lenis anchors:true)
@@ -313,7 +355,7 @@
     var bottomEntered = false;
 
     var bottomTl = gsap.timeline({ paused: true });
-    bottomTl.to(bottomItems, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out', stagger: 0.1 });
+    bottomTl.to(bottomItems, { y: 0, opacity: 1, duration: 1, ease: 'power1.out', stagger: 0.12 });
 
     var topTl = gsap.timeline({
       paused: true,
@@ -323,18 +365,21 @@
       },
       onReverseComplete: function () { topRevealed = false; }
     });
-    topTl.to(topItems, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out', stagger: 0.1 });
+    topTl.to(topItems, { y: 0, opacity: 1, duration: 1, ease: 'power1.out', stagger: 0.12 });
 
+    // 2026-08-25 (ревизия): start сдвинут с 'top 50%' на 'top 80%' — появление начинается раньше,
+    // как только секция входит в нижнюю часть экрана, а не когда доходит до середины. duration
+    // 0.6->1 + ease power2.out->power1.out (более плавное затухание, без резкого "довода" в конце).
     ScrollTrigger.create({
       trigger: top,
-      start: 'top 50%',
+      start: 'top 80%',
       onEnter: function () { topTl.play(); },
       onLeaveBack: function () { topTl.reverse(); }
     });
 
     ScrollTrigger.create({
       trigger: bottom,
-      start: 'top 50%',
+      start: 'top 80%',
       onEnter: function () {
         bottomEntered = true;
         if (topRevealed) bottomTl.play();
@@ -676,6 +721,44 @@
   });
 })();
 
+// Services: доп. scrub-анимация .services_image-wrap по скролу секции — лёгкий вертикальный
+// parallax-сдвиг (yPercent 0 -> -6), который завершается ровно на 50% скрола секции (start:
+// 'top top', end: 'bottom bottom', но сам tween в таймлайне занимает только первую половину
+// диапазона — дальше idle-заглушка той же длительности держит финальное состояние до конца
+// секции). Добавлено 2026-08-25 по прямому запросу. **Свойство намеренно НЕ scale** — entrance-
+// анимация выше уже управляет scale (0.1->1) на этом же элементе через paused timeline/hover;
+// scale тут дал бы гонку двух независимых GSAP-контроллеров за одно и то же свойство (проверено:
+// при быстром скролле, догоняющем entrance ещё в процессе, оба тsuccess пишут в transform в одном
+// тике и визуально "дёргают" друг друга) — yPercent entrance никогда не трогает, конфликта нет.
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  var section = document.querySelector('.section-services');
+  var imageWrap = document.querySelector('.services_image-wrap');
+  if (!section || !imageWrap) return;
+
+  ScrollTrigger.matchMedia({
+    '(min-width: 992px)': function () {
+      var tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: section,
+          start: 'top top',
+          end: 'bottom bottom',
+          scrub: true
+        }
+      });
+      tl.to(imageWrap, { yPercent: -6, ease: 'none', duration: 0.5 })
+        .to(imageWrap, { duration: 0.5 }); // idle-заглушка: держит yPercent:-6 вторую половину скрола
+
+      return function () {
+        if (tl.scrollTrigger) tl.scrollTrigger.kill();
+        tl.kill();
+        gsap.set(imageWrap, { clearProps: 'transform' });
+      };
+    }
+  });
+})();
+
 // Idea: reveal контента секции. Секция осталась плавным потоком (без явной высоты) —
 // предыдущая версия с .idea_title-pin/-runway была откачена: overflow:hidden 100vh-бокс обрезал
 // двухстрочный заголовок (огромный font-size), а 250vh раннвея создавали пустой провал в скроле.
@@ -771,10 +854,12 @@
     },
     onReverseComplete: function () { titleRevealed = false; }
   });
+  // 2026-08-25: скорость вдвое медленнее по прямому запросу — duration 2->4, stagger 0.1->0.2
+  // (пропорционально, чтобы сохранить тот же относительный ритm между title-wrap'ами).
   titleTl
-    .to(titleWraps, { y: 0, duration: 2, ease: 'power2.out', stagger: 0.1 })
-    .to(titles, { y: 0, opacity: 1, duration: 2, ease: 'power2.out', stagger: 0.1 }, '<')
-    .to(titleInners, { yPercent: 0, duration: 2, ease: 'power2.out', stagger: 0.1 }, '<');
+    .to(titleWraps, { y: 0, duration: 4, ease: 'power2.out', stagger: 0.2 })
+    .to(titles, { y: 0, opacity: 1, duration: 4, ease: 'power2.out', stagger: 0.2 }, '<')
+    .to(titleInners, { yPercent: 0, duration: 4, ease: 'power2.out', stagger: 0.2 }, '<');
 
   if (ideaTop) {
     ScrollTrigger.create({
@@ -1197,6 +1282,21 @@
 
   layout();
   window.addEventListener('resize', layout);
+  // 2026-08-25 (фикс бага): .founder_img — loading="lazy" и находится в самом низу страницы
+  // (~26000px), поэтому в момент первого layout() (сразу при выполнении скрипта, задолго до
+  // того как пользователь реально доскроллит досюда) картинка браузером ЕЩЁ НЕ загружена —
+  // её getBoundingClientRect() даёт width:0, из-за чего imgRect.left считается неверно (как
+  // будто у 0-ширины бокса, по центру флекс-контейнера), а cx кругов — мимо реального центра
+  // картинки. Итог: при вращении маски круги вылезают за левый край .founder_img и обрезаются
+  // ("половина круга, съехавшая маска"). window 'load' НЕ помогает — lazy-картинка вне вьюпорта
+  // не блокирует load вообще, грузится только когда пользователь доскроллит близко. Правильный
+  // триггер — 'load' САМОЙ картинки (или img.complete, если она вдруг уже готова — например,
+  // при повторном заходе из кэша браузера).
+  if (img.complete && img.naturalWidth > 0) {
+    layout();
+  } else {
+    img.addEventListener('load', layout, { once: true });
+  }
 
   ScrollTrigger.create({
     trigger: section,
@@ -1282,24 +1382,19 @@
   });
 })();
 
-// Footer (.footer, id footer): .footer_left и .footer_contacts (прямые потомки, единственные
-// найденные — по прямому запросу) появляются по очереди slide-up(2rem) + opacity, задержка 0.2с,
-// обратимый paused timeline (onEnter -> play(), onLeaveBack -> reverse()). Добавлено 2026-08-25,
-// триггер менялся 3 раза тем же днём:
-// 1) сначала 'top 50%' (стандартная для сайта viewport-relative формулировка) — оказался
-//    физически недостижим: .footer короткий (~278px, меньше половины вьюпорта), на максимальном
-//    скроле страницы его top не поднимается выше ~69% экрана. Обнаружено через ScrollTrigger
-//    progress, навсегда застрявший на 0.
-// 2) затем 'center bottom' (центр футера достиг низа вьюпорта = видна половина его собственной
-//    высоты) — под формулировку "на половину своей высоты".
-// 3) затем 'bottom bottom' (нижняя граница футера коснулась нижней границы экрана) — по прямому
-//    запросу уточнили именно этот момент. Проблема: это ровно максимально достижимый скролл
-//    страницы (совпадает с концом документа) — граничное значение, которое browser/Lenis не всегда
-//    физически долистывают до последнего пикселя (rounding, lerp-демпфирование не долетает точно
-//    до предела) — пользователь заметил, что анимация не доигрывает до конца.
-// 4) **финально 'bottom 90%'** — та же логика ("нижняя граница футера"), но с запасом: триггер
-//    срабатывает чуть РАНЬШЕ достижения физического предела скролла, а не ровно на нём — надёжно
-//    долистывается при любом реальном скроле.
+// Footer (.footer, id footer): .footer_left и .footer_contacts появляются по очереди
+// slide-up(2rem) + opacity, задержка 0.2с, обратимый paused timeline (onEnter -> play(),
+// onLeaveBack -> reverse()). Добавлено 2026-08-25, триггер менялся несколько раз тем же днём —
+// см. историю версий файла для 'top 50%' / 'center bottom' / 'bottom bottom' / 'bottom 90%'.
+// **2026-08-25 (фикс бага)**: 'bottom 90%' математически НЕДОСТИЖИМ для .footer — это последний
+// элемент страницы (ничего ниже), поэтому на максимально возможном скроле его нижняя граница
+// всегда останавливается РОВНО на 100% высоты вьюпорта (некуда скроллить дальше, чтобы дотянуть
+// её до 90%) — trigger.progress навсегда застревал на 0, .footer_left/.footer_contacts оставались
+// невидимыми (opacity:0 из gsap.set), а .footer_links с соцсетями — единственное, чего gsap.set
+// вообще не касался — оставался всегда видимым. Пользователь это заметил как "видны только
+// ссылки соцсетей". Правильный, недостижимости не подверженный вариант — 'top 90%' (тот же
+// top-based идиом входа в кадр, что используется по всему сайту для остальных reveal-анимаций):
+// срабатывает, когда верх футера достигает 90% вьюпорта, задолго до предела скролла страницы.
 (function () {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
@@ -1316,7 +1411,7 @@
 
   ScrollTrigger.create({
     trigger: footer,
-    start: 'bottom 90%',
+    start: 'top 90%',
     onEnter: function () { footerRevealTl.play(); },
     onLeaveBack: function () { footerRevealTl.reverse(); }
   });

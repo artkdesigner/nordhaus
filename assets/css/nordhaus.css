@@ -2436,6 +2436,7 @@ figcaption {
 .button.quiet_btn {
   width: 8.5625rem;
   margin-top: var(--_size---70);
+  display: none; /* 2026-08-25: спрятано по прямому запросу, "пока что" — временно */
 }
 
 .button.founder_btn {
@@ -2510,7 +2511,7 @@ figcaption {
   grid-auto-columns: 1fr;
   transition: color .6s cubic-bezier(.455, .03, .515, .955);
   display: grid;
-  position: absolute;
+  position: fixed;
   top: 0;
 }
 
@@ -2735,6 +2736,7 @@ figcaption {
   width: 100%;
   height: 250vh;
   position: relative;
+  margin-top: -50vh;
 }
 
 .silence_video {
@@ -2965,6 +2967,7 @@ figcaption {
   flex-flow: column;
   display: flex;
   position: relative;
+  margin-top: -100vh;
 }
 
 .idea_top {
@@ -3010,7 +3013,7 @@ figcaption {
 
 .section-services {
   width: 100%;
-  height: 250vh;
+  height: 450vh;
   padding-right: var(--_size---20);
   padding-left: var(--_size---20);
   display: flex;
