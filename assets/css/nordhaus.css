@@ -3970,8 +3970,13 @@ figcaption {
     max-width: 25rem;
     font-size: 1.5rem;
   }.founder_img-wrap {
-    flex: 0 auto;
-    height: 26rem;
+    flex: 1;
+    min-height: 0;
+    container-type: size;
+  }.founder_mask {
+    width: min(100cqw, 100cqh);
+    height: min(100cqw, 100cqh);
+    margin: auto;
   }.founder_footer {
     flex-flow: column;
     display: flex;
@@ -4184,8 +4189,6 @@ figcaption {
   }.founder_title {
     max-width: 100%;
     font-size: 1.25rem;
-  }.founder_img-wrap {
-    height: 12.5rem;
   }.founder_description {
     max-width: 100%;
   }.footer {
