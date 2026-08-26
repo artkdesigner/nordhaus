@@ -912,25 +912,54 @@
     });
     textTl.to(textWraps, { y: 0, opacity: 1, duration: 1, ease: 'none', stagger: 0.2 });
 
-    // 2026-08-26: bottom_row тоже был на старом section-wide masterTl (метка 0.65 от прогресса
-    // ВСЕЙ секции) — после того как title-wrap/text-wrap переехали на свои .idea_top-триггеры,
-    // metка 0.65 больше ни с чем не синхронизирована (другой trigger, другой scroll-диапазон), из-
-    // за чего bottom_row стал заметно отставать от предыдущих анимаций. По прямому запросу —
-    // ОТДЕЛЬНЫЙ триггер на тот же .idea_top, стартующий ровно там, где заканчивается text-wrap
-    // (start:'top 35%' — граница textTl), тот же безопасный приём, что и у text-wrap выше (не
-    // добавлять в чужой timeline без позиции — см. комментарий про фикс регрессии). .idea_top
-    // здесь используется только как scroll-позиционный ориентир — bottom_row физически лежит в
-    // .idea_bottom, соседнем блоке, но это нормально (тот же приём применялся и раньше на этом
-    // сайте, см. историю ride-over триггеров).
-    var rowsTl = gsap.timeline({
-      scrollTrigger: {
-        trigger: ideaTop,
-        start: 'top 35%',
-        end: 'top 10%',
-        scrub: 0.5
+    // 2026-08-26 (переписано с scrub на played+gating, по прямому запросу): bottom_row теперь
+    // запускается по СВОЕЙ собственной позиции — когда КАЖДЫЙ ряд доходит до 70% высоты экрана
+    // ('top 70%'), а не долей прогресса .idea_top. Условие "не раньше text-wrap" реализовано тем
+    // же проверенным-безопасным приёмом, что уже использовался в истории этой секции (см. историю
+    // title-wrap/text-wrap выше по файлу, 2026-08-25): флаг textRevealed + очередь pendingRows —
+    // если строка дошла до 70% раньше, чем text-wrap завершился, она не проигрывается сразу, а
+    // встаёт в очередь; отдельный ScrollTrigger на .idea_top с start:'top 35%' (та же граница, на
+    // которой заканчивается textTl) ставит флаг и разом проигрывает всё, что накопилось. ВАЖНО:
+    // гейтить можно только PLAYED (не scrub) таймлайн — именно поэтому каждая строка получила
+    // свою reversible played-таймлайн (play()/reverse()), а не scrub, гейтинг scrub-таймлайна
+    // ломается на быстром скроле (см. ту же историю).
+    var textRevealed = false;
+    var pendingRows = [];
+
+    ScrollTrigger.create({
+      trigger: ideaTop,
+      start: 'top 35%',
+      onEnter: function () {
+        textRevealed = true;
+        pendingRows.forEach(function (rowTl) { rowTl.play(); });
+        pendingRows = [];
+      },
+      onLeaveBack: function () {
+        textRevealed = false;
       }
     });
-    rowsTl.to(rows, { y: 0, opacity: 1, duration: 1, ease: 'none', stagger: 0.1 });
+
+    rows.forEach(function (row) {
+      var rowTl = gsap.timeline({ paused: true });
+      rowTl.to(row, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out' });
+
+      ScrollTrigger.create({
+        trigger: row,
+        start: 'top 70%',
+        onEnter: function () {
+          if (textRevealed) {
+            rowTl.play();
+          } else if (pendingRows.indexOf(rowTl) === -1) {
+            pendingRows.push(rowTl);
+          }
+        },
+        onLeaveBack: function () {
+          var idx = pendingRows.indexOf(rowTl);
+          if (idx !== -1) pendingRows.splice(idx, 1);
+          rowTl.reverse();
+        }
+      });
+    });
   }
 })();
 
