@@ -4163,6 +4163,8 @@ figcaption {
     height: calc(487.5vh + 100vh);
   }.section_echo {
     height: calc(384.375vh + 100vh);
+  }.section_quiet {
+    height: calc(300vh + 100vh);
   }.services_list-item-content {
     flex-flow: column;
   }.services_list-item-img {
