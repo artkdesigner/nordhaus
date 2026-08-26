@@ -939,6 +939,14 @@
 // process от низа до верха вьюпорта), поверх .services_pin растёт затемняющий оверлей
 // #252525 — из 0% в 50% opacity. Оверлей — обычный div, создаётся здесь же в рантайме,
 // т.к. в Designer под это отдельного элемента нет.
+// 2026-08-26 (фикс бага): на планшете/мобилке (<992px) services теряет pin и становится
+// обычным потоком (height:auto, .services_pin position:relative — см. CSS), но этот эффект
+// регистрировался БЕЗ учёта брейкпоинта — при этом .section-process всё ещё имел
+// margin-top:-100vh (десктопный ride-over), из-за чего на коротком non-pinned services process
+// наезжал почти сразу и секция выглядела "сплюснутой" с преждевременным затемнением. Margin-top
+// на планшете/мобилке убран в CSS, а сам оверлей теперь регистрируется только на десктопе
+// (matchMedia, тот же брейкпоинт 992px, что и у остального Services-поведения ниже) — на
+// планшете/мобилке services должен просто проскроллиться обычным потоком, без pin и затемнения.
 (function () {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
@@ -946,22 +954,31 @@
   var servicesPin = document.querySelector('.services_pin');
   if (!processSection || !servicesPin) return;
 
-  var overlay = document.createElement('div');
-  overlay.className = 'services_darken-overlay';
-  overlay.style.position = 'absolute';
-  overlay.style.inset = '0';
-  overlay.style.backgroundColor = '#252525';
-  overlay.style.opacity = '0';
-  overlay.style.pointerEvents = 'none';
-  servicesPin.appendChild(overlay);
+  ScrollTrigger.matchMedia({
+    '(min-width: 992px)': function () {
+      var overlay = document.createElement('div');
+      overlay.className = 'services_darken-overlay';
+      overlay.style.position = 'absolute';
+      overlay.style.inset = '0';
+      overlay.style.backgroundColor = '#252525';
+      overlay.style.opacity = '0';
+      overlay.style.pointerEvents = 'none';
+      servicesPin.appendChild(overlay);
 
-  ScrollTrigger.create({
-    trigger: processSection,
-    start: 'top bottom',
-    end: 'top top',
-    scrub: true,
-    onUpdate: function (self) {
-      overlay.style.opacity = String(self.progress * 0.5);
+      var trigger = ScrollTrigger.create({
+        trigger: processSection,
+        start: 'top bottom',
+        end: 'top top',
+        scrub: true,
+        onUpdate: function (self) {
+          overlay.style.opacity = String(self.progress * 0.5);
+        }
+      });
+
+      return function () {
+        trigger.kill();
+        overlay.remove();
+      };
     }
   });
 })();

@@ -3871,6 +3871,7 @@ figcaption {
     padding: var(--_size---150) var(--_size---10) var(--_size---10);
     justify-content: flex-start;
     align-items: flex-start;
+    margin-top: 0;
   }.process_video {
     height: 27.375rem;
     margin-top: -2.75rem;
