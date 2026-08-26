@@ -3297,7 +3297,7 @@ figcaption {
 }
 
 .section-slider {
-  height: 600vh;
+  height: 550vh;
   position: relative;
 }
 
@@ -3814,6 +3814,10 @@ figcaption {
   }.echo_card {
     width: 13.75rem;
     height: 18.75rem;
+  }.section_horizon {
+    height: 725vh;
+  }.section_echo {
+    height: 450vh;
   }.section_quiet {
     padding-right: var(--_size---10);
     padding-left: var(--_size---10);
@@ -4159,10 +4163,6 @@ figcaption {
   }.services_list-item.current {
     flex-flow: column;
     align-items: stretch;
-  }.section_horizon {
-    height: calc(487.5vh + 100vh);
-  }.section_echo {
-    height: calc(384.375vh + 100vh);
   }.section_quiet {
     height: calc(300vh + 100vh);
   }.services_list-item-content {
