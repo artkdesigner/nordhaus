@@ -751,24 +751,21 @@
         clearProps: 'transform,opacity'
       });
 
-      // 2026-08-26: граница фазы image-wrap сдвинута 0.5 -> 0.1 по прямому запросу "забери от
-      // анимации services_image-wrap 100vh и отдай её второй половине". Секция 350vh, вьюпорт
-      // ~100vh -> реальный scrub-диапазон ('top top'->'bottom bottom') = 350vh-100vh = 250vh
-      // ровно (алгебраически точно, не зависит от фактической высоты вьюпорта в px). Старая
-      // граница 0.5 = 125vh на фазу image-wrap; process-наезд/затемнение (см. отдельный
-      // ScrollTrigger ниже, 'top bottom'->'top top' от .section-process) начинает перекрывать
-      // services ровно за 100vh ДО конца этого диапазона, т.е. с 150vh. При 125vh-фазе список
-      // .services_list-item успевал показаться только за 25vh (150-125) до начала затемнения —
-      // отсюда жалоба "почти сразу наезжает следующая секция". Новая граница 0.1 = 25vh на фазу
-      // image-wrap (забрали 100vh), список теперь виден чистым 125vh (25-150vh) до начала
-      // затемнения — та самая "вторая половина", которой отдали освобождённые 100vh.
+      // 2026-08-26 (снова): image-wrap scale ощущался слишком резким — добавили фазе ещё 100vh
+      // скролла, ПЛЮС столько же добавили высоте секции (350vh -> 450vh), чтобы не откусить это
+      // время у окна чистого показа списка (тот же принцип, что и в предыдущей правке ниже, просто
+      // в другую сторону). Секция теперь 450vh, реальный scrub-диапазон ('top top'->'bottom
+      // bottom') = 450vh-100vh = 350vh. Фаза image-wrap была 25vh (доля 0.1) -> стала 125vh
+      // (доля 125/350 = 0.35714...). Process-наезд по-прежнему стартует за 100vh до конца
+      // диапазона, т.е. теперь с 250vh (было 150vh) — окно чистого показа списка (250-125=125vh)
+      // осталось РОВНО ТЕМ ЖЕ, что и до этой правки, не сжалось.
       var scaleTrigger = ScrollTrigger.create({
         trigger: section,
         start: 'top top',
         end: 'bottom bottom',
         scrub: true,
         onUpdate: function (self) {
-          var localProgress = Math.min(self.progress / 0.1, 1);
+          var localProgress = Math.min(self.progress / (125 / 350), 1);
           gsap.set(imageWrap, { scale: 0.1 + 0.9 * localProgress });
           if (localProgress >= 1 && !imageWrapReady) {
             imageWrapReady = true;
@@ -1024,10 +1021,12 @@
 })();
 
 // Process: контент .process_content появляется по очереди (slide-up + opacity) — в DOM-порядке
-// это .process_text-wrap, .process_img, .process_text-wrap — триггер на top 50% (середина
-// экрана), обратимый: onEnter -> play(), onLeaveBack -> reverse() (при скроле назад анимация
-// откатывается). duration/stagger удвоены дважды (0.7->1.4->2.8, 0.15->0.3->0.6) — по двум
-// последовательным запросам замедлить вдвое, элементы появлялись слишком резко.
+// это .process_text-wrap, .process_img, .process_text-wrap — триггер на top 30% (было 50%, сдвинуто
+// по прямому запросу "появляются немного рано, отодвинь появление повыше" — секция должна
+// подняться выше по экрану/дальше проскроллиться, прежде чем контент начнёт появляться), обратимый:
+// onEnter -> play(), onLeaveBack -> reverse() (при скроле назад анимация откатывается). duration/
+// stagger удвоены дважды (0.7->1.4->2.8, 0.15->0.3->0.6) — по двум последовательным запросам
+// замедлить вдвое, элементы появлялись слишком резко.
 (function () {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
@@ -1051,7 +1050,7 @@
 
   ScrollTrigger.create({
     trigger: section,
-    start: 'top 50%',
+    start: 'top 30%',
     onEnter: function () { revealTl.play(); },
     onLeaveBack: function () { revealTl.reverse(); }
   });
