@@ -3828,6 +3828,7 @@ figcaption {
     grid-row-gap: var(--_size---50);
   }.section-idea {
     padding: var(--_size---70) var(--_size---10);
+    padding-top: calc(var(--_size---70) + 50vh);
     grid-column-gap: var(--_size---50);
     grid-row-gap: var(--_size---50);
   }.idea_top {
