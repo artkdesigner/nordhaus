@@ -838,15 +838,37 @@
     }
   });
 
-  // фаза title-wrap: окно 0.25-0.50 (span 0.25), 4 элемента
   masterTl
-    .to(titleWraps, { yPercent: 0, duration: 0.15, ease: 'none', stagger: 0.0333 }, 0.25)
-    .to(titles, { y: 0, opacity: 1, duration: 0.15, ease: 'none', stagger: 0.0333 }, 0.25)
-    .to(titleInners, { yPercent: 0, duration: 0.15, ease: 'none', stagger: 0.0333 }, 0.25)
     // фаза text-wrap: окно 0.50-0.65 (span 0.15), 3 элемента
     .to(textWraps, { y: 0, opacity: 1, duration: 0.09, ease: 'none', stagger: 0.03 }, 0.5)
     // фаза idea_bottom: окно 0.65-1.0 (span 0.35), 8 элементов
     .to(rows, { y: 0, opacity: 1, duration: 0.15, ease: 'none', stagger: 0.02857 }, 0.65);
+
+  // 2026-08-26: title-wrap ВЫНЕСЕН из master-таймлайна в свой отдельный scrub-триггер, привязанный
+  // к .idea_top (обёртка 4 title-wrap + 3 text-wrap), а не к прогрессу всей секции — по прямому
+  // запросу "анимация должна заканчиваться к середине экрана, а не к верхней части". Раньше фаза
+  // была долей (0.25-0.50) от прогресса ВСЕЙ секции ('top top'->'bottom bottom' её собственных
+  // ~1795px высоты) — а .idea_title-wrap лежит всего ~170px от начала .idea_top, поэтому её
+  // "естественная" позиция достигает середины экрана уже на ~13% прогресса секции; докрутка до 50%
+  // раньше означала кучу лишнего скрола, за который title-wrap успевал уехать к самому верху экрана
+  // до срабатывания. Прямой trigger на сам .idea_top с end:'top 50%' завязан на его РЕАЛЬНУЮ позицию
+  // во вьюпорте, а не на долю чужой (гораздо большей) секции — устойчиво к будущим изменениям высоты
+  // секции/паддингов, ничего пересчитывать вручную не нужно.
+  var ideaTop = section.querySelector('.idea_top');
+  if (ideaTop) {
+    var titleTl = gsap.timeline({
+      scrollTrigger: {
+        trigger: ideaTop,
+        start: 'top bottom',
+        end: 'top 50%',
+        scrub: 0.5
+      }
+    });
+    titleTl
+      .to(titleWraps, { yPercent: 0, duration: 1, ease: 'none', stagger: 0.2 }, 0)
+      .to(titles, { y: 0, opacity: 1, duration: 1, ease: 'none', stagger: 0.2 }, 0)
+      .to(titleInners, { yPercent: 0, duration: 1, ease: 'none', stagger: 0.2 }, 0);
+  }
 })();
 
 // Process наезжает на services тем же приёмом, что и раньше в цепочке секций
