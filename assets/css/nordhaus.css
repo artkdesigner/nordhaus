@@ -3956,15 +3956,16 @@ figcaption {
     padding-left: var(--_size---0);
     border-left-width: 0;
   }.section-founder {
-    height: auto;
+    height: 200vh;
     margin-bottom: var(--_size---70);
   }.founder_pin {
-    height: auto;
+    height: 100vh;
     padding-right: var(--_size---10);
     padding-left: var(--_size---10);
     grid-column-gap: var(--_size---10);
     grid-row-gap: var(--_size---10);
-    position: relative;
+    position: sticky;
+    top: 0;
   }.founder_title {
     max-width: 25rem;
     font-size: 1.5rem;

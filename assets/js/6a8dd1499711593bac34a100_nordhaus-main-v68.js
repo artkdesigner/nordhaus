@@ -1418,28 +1418,17 @@
     }, { once: true });
   }
 
-  // 2026-08-26 (фикс бага): 'top top'->'bottom bottom' на .section-founder даёт реальный scrub-
-  // диапазон, только пока секция запинена (200vh секция - 100vh вьюпорт = 100vh скрола). На
-  // планшете/мобилке (<992px) секция теряет pin и становится height:auto (см. CSS) — её
-  // натуральная высота контента часто МЕНЬШЕ вьюпорта, из-за чего диапазон 'top top'->'bottom
-  // bottom' схлопывается почти до нуля, и вращение маски либо не происходит, либо проскакивает
-  // мгновенно. Фикс — по прямому запросу "по аналогии с десктопом": на планшете/мобилке триггер
-  // берёт .founder_img-wrap (не запиненный, но с реальной собственной высотой).
-  // **Важный нюанс, найденный при проверке**: 'top bottom'->'bottom top' (полный проход блока
-  // через вьюпорт) technически корректная идея, но Founder — ПОСЛЕДНЯЯ секция перед футером, и
-  // конечная точка ('bottom top', т.е. низ imgWrap у самого верха экрана) требует БОЛЬШЕ скрола,
-  // чем физически есть на странице (макс. scrollY страницы меньше расчётной конечной точки
-  // триггера) — та же ловушка, что уже чинили для footer reveal (см. историю в
-  // project_nordhaus_webflow: "bottom 90%" вместо точного "bottom"). Взято безопасное окно
-  // 'top bottom'->'bottom 90%' — целиком укладывается в реально достижимый скролл СТРАНИЦЫ, с
-  // запасом, а не только в размер элемента.
-  var isDesktopFounder = window.matchMedia('(min-width: 992px)').matches;
-  var imgWrapEl = document.querySelector('.founder_img-wrap');
-
+  // 2026-08-26 (ревизия): 'top top'->'bottom bottom' на .section-founder даёт реальный scrub-
+  // диапазон, только пока секция запинена (200vh секция - 100vh вьюпорт = 100vh скрола). Раньше
+  // на планшете/мобилке (<992px) секция теряла pin и становилась height:auto, что схлопывало
+  // диапазон почти до нуля — временно чинили через отдельный триггер на .founder_img-wrap с
+  // укороченным окном. По прямому запросу вернули pin-архитектуру планшету/мобилке того же вида,
+  // что на десктопе (.section-founder: 200vh, .founder_pin: 100vh + sticky — см. CSS), так что
+  // урезанный workaround больше не нужен: триггер снова единый для всех брейкпоинтов.
   ScrollTrigger.create({
-    trigger: isDesktopFounder ? section : (imgWrapEl || section),
-    start: isDesktopFounder ? 'top top' : 'top bottom',
-    end: isDesktopFounder ? 'bottom bottom' : 'bottom 90%',
+    trigger: section,
+    start: 'top top',
+    end: 'bottom bottom',
     scrub: true,
     onUpdate: function (self) {
       lastProgress = self.progress;
