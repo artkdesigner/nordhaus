@@ -3931,6 +3931,10 @@ figcaption {
     display: flex;
     flex-direction: row;
     overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }.slider_content-grid::-webkit-scrollbar {
+    display: none;
   }.slide-content {
     flex: none;
     width: 18.75rem;
