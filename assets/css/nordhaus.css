@@ -2441,6 +2441,7 @@ figcaption {
 
 .button.founder_btn {
   width: 4.3rem;
+  display: none; /* 2026-08-26: спрятано по прямому запросу, "пока что" — временно */
 }
 
 
