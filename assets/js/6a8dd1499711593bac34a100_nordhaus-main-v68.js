@@ -1021,12 +1021,12 @@
 })();
 
 // Process: контент .process_content появляется по очереди (slide-up + opacity) — в DOM-порядке
-// это .process_text-wrap, .process_img, .process_text-wrap — триггер на top 30% (было 50%, сдвинуто
-// по прямому запросу "появляются немного рано, отодвинь появление повыше" — секция должна
-// подняться выше по экрану/дальше проскроллиться, прежде чем контент начнёт появляться), обратимый:
-// onEnter -> play(), onLeaveBack -> reverse() (при скроле назад анимация откатывается). duration/
-// stagger удвоены дважды (0.7->1.4->2.8, 0.15->0.3->0.6) — по двум последовательным запросам
-// замедлить вдвое, элементы появлялись слишком резко.
+// это .process_text-wrap, .process_img, .process_text-wrap — триггер на top 50% (середина
+// экрана; был кратко сдвинут на 30% 2026-08-26, откатили обратно тем же днём — "перебрали",
+// 50% был правильным значением), обратимый: onEnter -> play(), onLeaveBack -> reverse() (при
+// скроле назад анимация откатывается). duration/stagger удвоены дважды (0.7->1.4->2.8,
+// 0.15->0.3->0.6) — по двум последовательным запросам замедлить вдвое, элементы появлялись
+// слишком резко.
 (function () {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
@@ -1050,7 +1050,7 @@
 
   ScrollTrigger.create({
     trigger: section,
-    start: 'top 30%',
+    start: 'top 50%',
     onEnter: function () { revealTl.play(); },
     onLeaveBack: function () { revealTl.reverse(); }
   });
