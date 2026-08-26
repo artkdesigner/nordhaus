@@ -801,22 +801,26 @@
       // анимация заканчивалась чуть выше середины экрана, хотели раньше. 'bottom bottom' —
       // нижняя граница элемента пересекла нижнюю границу вьюпорта, т.е. самый ранний момент,
       // когда карточка вообще начинает появляться снизу экрана.
+      // 2026-08-26 (фикс бага): `once: true` без onLeaveBack означало, что при скроле назад
+      // карточка не пряталась обратно — по прямому запросу убран once, добавлен обратимый
+      // paused-timeline (play()/reverse()), тот же принцип, что и у остальных reveal-анимаций
+      // на сайте (process_content/idea rows и т.д.).
       gsap.set(items, { yPercent: 100, opacity: 0 });
 
       var triggers = items.map(function (item) {
+        var tl = gsap.timeline({ paused: true });
+        tl.to(item, {
+          yPercent: 0,
+          opacity: 1,
+          duration: 0.6,
+          ease: 'power2.out'
+        });
+
         return ScrollTrigger.create({
           trigger: item,
           start: 'bottom bottom',
-          once: true,
-          onEnter: function () {
-            gsap.to(item, {
-              yPercent: 0,
-              opacity: 1,
-              duration: 0.6,
-              ease: 'power2.out',
-              overwrite: true
-            });
-          }
+          onEnter: function () { tl.play(); },
+          onLeaveBack: function () { tl.reverse(); }
         });
       });
 
