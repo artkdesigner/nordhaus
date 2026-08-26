@@ -7,16 +7,19 @@
 // запросу "не растворяется, а уезжает вниз") и скрывается (display:none, чтобы не блокировать
 // клики после исчезновения). Уезд запускается ТОЛЬКО после реальной полной загрузки сайта.
 // **2026-08-25 (ревизия)**: `window.load` НЕ гарантирует, что весь контент реально загружен — он
-// не ждёт `<img loading="lazy">` (а у нас почти все картинки lazy, т.к. секции далеко за первым
-// экраном при высоте скролла ~28000px) и не блокируется видео-элементами (спецификация не считает
-// `<video>` blocking-ресурсом для load). Поэтому по прямому запросу "прелоудер уходит только после
-// того, как весь контент сайта загружен" ждём явно: window 'load' + document.fonts.ready + КАЖДУЮ
-// картинку (img.complete && naturalWidth>0, иначе слушаем load/error) + КАЖДОЕ видео (readyState>=2
-// / 'loadeddata', иначе слушаем loadeddata/error) — см. whenAllContentLoaded() ниже. readyState>=2
+// не ждёт `<img loading="lazy">` и не блокируется видео-элементами (спецификация не считает
+// `<video>` blocking-ресурсом для load). Поэтому ждём явно: window 'load' + document.fonts.ready +
+// картинки (img.complete && naturalWidth>0, иначе слушаем load/error) + видео (readyState>=2 /
+// 'loadeddata', иначе слушаем loadeddata/error) — см. whenAllContentLoaded() ниже. readyState>=2
 // ("готов показать кадр"), а НЕ >=4/'canplaythrough' ("докачан до конца") — фоновые видео вне
 // текущей секции браузер может придержать/оборвать их буферизацию, пока секция не видна, так что
 // ждать полной докачки можно неопределённо долго. Есть safety-таймаут 8с (Promise.race), чтобы
 // залипший запрос не заблокировал сайт надолго — не основной триггер, а страховка на сбой сети.
+// **2026-08-26 (фикс "залипания на 90%")**: изначально ждали КАЖДУЮ картинку/видео на всей
+// ~28000px странице, включая десятки ещё не начавших грузиться loading="lazy" секций далеко за
+// первым экраном — это условие почти никогда не выполнялось быстро, и прелоудер обычно упирался в
+// 8с safety-таймаут. По прямому запросу сузили ожидание до контента ПЕРВОГО ЭКРАНА — см.
+// isAboveFold() ниже.
 // **2026-08-25: формат 000-100 + поцифровая "одометр"-анимация** (по прямому запросу) — вместо
 // textContent строим на лету 3 "слота" (по одному на разряд), каждый — overflow:hidden окно
 // высотой 1em, внутри — вертикальная лента из 10 цифр 0..9 (display:flex;flex-direction:column).
@@ -109,9 +112,21 @@
     });
   }
 
+  // 2026-08-26 (фикс "залипания на 90%"): раньше ждали КАЖДУЮ картинку/видео на всей ~28000px
+  // странице, включая десятки loading="lazy" секций, до которых пользователь ещё не доскроллил —
+  // браузер их даже не начинает грузить, пока они не близко к вьюпорту, так что это условие почти
+  // никогда не выполнялось быстро и прелоудер обычно упирался в 8с safety-таймаут. По прямому
+  // запросу сузили ожидание до контента ПЕРВОГО ЭКРАНА — на момент запуска скрипта (до первого
+  // скролла, прелоудер его и так блокирует) scrollY===0, поэтому "видим в первом вьюпорте"
+  // проверяется просто через getBoundingClientRect() без поправки на scroll offset.
+  function isAboveFold(el) {
+    var r = el.getBoundingClientRect();
+    return r.top < window.innerHeight && r.bottom > 0;
+  }
+
   function whenAllContentLoaded(cb) {
-    var imgs = Array.prototype.slice.call(document.images);
-    var videos = Array.prototype.slice.call(document.querySelectorAll('video'));
+    var imgs = Array.prototype.slice.call(document.images).filter(isAboveFold);
+    var videos = Array.prototype.slice.call(document.querySelectorAll('video')).filter(isAboveFold);
 
     var imgPromises = imgs.map(function (img) {
       if (img.complete && img.naturalWidth > 0) return Promise.resolve();
