@@ -510,6 +510,16 @@
   }
   initHorizonSlides();
 
+  // 2026-08-26: на мобилке (<=767px) шаги horizon/echo ощущались слишком короткими — по прямому
+  // запросу увеличены на 50% ТОЛЬКО на мобилке (планшет/десктоп не тронуты). Проверка внутри
+  // функции (не закешированный флаг) — start у ScrollTrigger.create ниже сама уже функция,
+  // которую GSAP пересчитывает на resize/refresh, так что window.innerWidth здесь всегда живой,
+  // без риска "залипшего" значения при ресайзе без перезагрузки (см. история такого бага у
+  // Founder — isDesktopFounder считался один раз при загрузке).
+  function mobileStepBoost(factor) {
+    return window.innerWidth <= 767 ? factor * 1.5 : factor;
+  }
+
   function setupHorizonSlides() {
     var section = document.querySelector('.section_horizon');
     var slides = Array.prototype.slice.call(document.querySelectorAll('.horizon_img'));
@@ -522,8 +532,9 @@
         trigger: section,
         // 2026-08-26: шаг скролла между слайдами сокращён на 50% (0.5x innerHeight
         // вместо 1x) по прямому запросу — только длительность ШАГА, не скорость
-        // самого перехода (duration/ease у gsap.to ниже не тронуты).
-        start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * 0.5) + ' top'; },
+        // самого перехода (duration/ease у gsap.to ниже не тронуты). На мобилке фактор
+        // дополнительно увеличен на 50% (см. mobileStepBoost выше).
+        start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * mobileStepBoost(0.5)) + ' top'; },
         onEnter: function () {
           gsap.to(slide, { yPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
           gsap.to(slides[i - 1], { yPercent: -10, duration: 1, ease: 'power2.inOut', overwrite: true });
@@ -575,8 +586,9 @@
           trigger: section,
           // 2026-08-26: шаг сокращён на 50% (0.5x), затем по прямому запросу "шаг стал слишком
           // коротким" увеличен на 25% сверху этого — 0.5*1.25=0.625x innerHeight. Только длительность
-          // ШАГА, не скорость самого перехода (duration/ease у gsap.to ниже не тронуты).
-          start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * 0.625) + ' top'; },
+          // ШАГА, не скорость самого перехода (duration/ease у gsap.to ниже не тронуты). На мобилке
+          // фактор дополнительно увеличен на 50% (см. mobileStepBoost выше).
+          start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * mobileStepBoost(0.625)) + ' top'; },
           onEnter: function () {
             gsap.to(cardSlide, { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
             gsap.to(bgSlide, { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });

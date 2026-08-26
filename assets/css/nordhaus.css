@@ -4174,6 +4174,7 @@ figcaption {
     padding-left: var(--_size---20);
   }.slider_title {
     right: var(--_size---10);
+    width: auto;
   }.slide-content {
     width: 20.9375rem;
   }.news_card {
