@@ -2509,7 +2509,7 @@ figcaption {
   grid-template-rows: auto;
   grid-template-columns: 1fr 1fr 1fr 1fr;
   grid-auto-columns: 1fr;
-  transition: color .6s cubic-bezier(.455, .03, .515, .955);
+  transition: color .6s cubic-bezier(.455, .03, .515, .955), opacity .6s cubic-bezier(.455, .03, .515, .955);
   display: grid;
   position: fixed;
   top: 0;

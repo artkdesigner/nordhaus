@@ -241,6 +241,10 @@
 
   var echoSection = document.querySelector('.section_echo');
   var horizonMask = document.querySelector('.horizon_mask');
+  // .slider_pin (не .section-slider) — та же причина, что у horizonMask выше: .section-slider
+  // высотой 600vh, и её raw rect "перекрывал" бы navbar почти всё время, пока идёт скролл секции,
+  // а не только пока она реально видна. .slider_pin — настоящий sticky-бокс (100vh).
+  var sliderPin = document.querySelector('.slider_pin');
   var echoActiveSlide = 0;
 
   // 2026-08-25 (фикс бага): .navbar_project-link (Silence/Horizon/Echo/Quiet Geometry/Studio/
@@ -261,6 +265,20 @@
     colorTargets.forEach(function (el) {
       el.style.color = isDark ? DARK : '';
     });
+  }
+
+  // 2026-08-26: navbar полностью прячется (opacity:0) над Slider, по прямому запросу.
+  // pointer-events:none вместе с opacity, чтобы невидимый navbar не перехватывал клики, пока
+  // Slider на экране — восстанавливается автоматически, как только секция уходит. Проверка идёт
+  // по .slider_pin (см. комментарий у объявления переменной выше), плюс тот же opacity-гейт, что
+  // и у horizonMask — .slider_pin тоже угасает в opacity:0 через наездный fade на .section-news
+  // (см. stages), и его sticky-детач так же отстаёт от визуального скрытия ещё на 100vh.
+  var isHiddenState = null;
+  function setHidden(isHidden) {
+    if (isHidden === isHiddenState) return;
+    isHiddenState = isHidden;
+    navbar.style.opacity = isHidden ? '0' : '';
+    navbar.style.pointerEvents = isHidden ? 'none' : '';
   }
 
   // 2026-08-26 (фикс бага): .horizon_mask перестаёт быть видимым (opacity доходит до 0 через
@@ -284,6 +302,15 @@
       isDark = er.top <= navHeight && er.bottom >= 0;
     }
     setDark(isDark);
+
+    if (sliderPin) {
+      var pr = sliderPin.getBoundingClientRect();
+      var pinOverlapping = pr.top <= navHeight && pr.bottom >= 0;
+      if (pinOverlapping && parseFloat(getComputedStyle(sliderPin).opacity) <= 0.02) {
+        pinOverlapping = false;
+      }
+      setHidden(pinOverlapping);
+    }
   }
 
   window.__setEchoActiveSlide = function (index) {
