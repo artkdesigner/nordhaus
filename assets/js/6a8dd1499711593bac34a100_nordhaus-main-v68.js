@@ -1382,6 +1382,13 @@
     pivot.y = (minY + maxY) / 2;
   }
 
+  var lastProgress = 0;
+
+  function applyRotation() {
+    var angle = lastProgress * 180;
+    group.setAttribute('transform', 'rotate(' + angle + ' ' + pivot.x + ' ' + pivot.y + ')');
+  }
+
   layout();
   window.addEventListener('resize', layout);
   // 2026-08-25 (фикс бага): .founder_img — loading="lazy" и находится в самом низу страницы
@@ -1394,10 +1401,21 @@
   // не блокирует load вообще, грузится только когда пользователь доскроллит близко. Правильный
   // триггер — 'load' САМОЙ картинки (или img.complete, если она вдруг уже готова — например,
   // при повторном заходе из кэша браузера).
+  // 2026-08-26 (фикс бага, планшет/мобилка): layout() по 'load' пересчитывал pivot, но НЕ
+  // перерисовывал transform — он обновлялся только на следующем скролл-тике. На десктопе это
+  // незаметно (100vh пина даёт фото время догрузиться заранее). На планшете/мобилке диапазон
+  // триггера короткий и начинается почти вплотную к появлению .founder_img-wrap в вьюпорте —
+  // фото часто ещё грузится в момент входа в диапазон, и первые кадры вращения используют
+  // старый pivot (край картинки, а не центр круга) — маска выглядит "не крутится", пока
+  // пользователь не проскроллит достаточно, чтобы дошёл следующий scroll-тик. Фикс: сразу после
+  // layout() по 'load' форсируем applyRotation() с последним известным progress, а не ждём скролл.
   if (img.complete && img.naturalWidth > 0) {
     layout();
   } else {
-    img.addEventListener('load', layout, { once: true });
+    img.addEventListener('load', function () {
+      layout();
+      applyRotation();
+    }, { once: true });
   }
 
   // 2026-08-26 (фикс бага): 'top top'->'bottom bottom' на .section-founder даёт реальный scrub-
@@ -1424,8 +1442,8 @@
     end: isDesktopFounder ? 'bottom bottom' : 'bottom 90%',
     scrub: true,
     onUpdate: function (self) {
-      var angle = self.progress * 180;
-      group.setAttribute('transform', 'rotate(' + angle + ' ' + pivot.x + ' ' + pivot.y + ')');
+      lastProgress = self.progress;
+      applyRotation();
     }
   });
 })();
