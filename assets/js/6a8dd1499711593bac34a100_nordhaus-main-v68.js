@@ -1021,12 +1021,16 @@
 })();
 
 // Process: контент .process_content появляется по очереди (slide-up + opacity) — в DOM-порядке
-// это .process_text-wrap, .process_img, .process_text-wrap — триггер на top 50% (середина
-// экрана; был кратко сдвинут на 30% 2026-08-26, откатили обратно тем же днём — "перебрали",
-// 50% был правильным значением), обратимый: onEnter -> play(), onLeaveBack -> reverse() (при
-// скроле назад анимация откатывается). duration/stagger удвоены дважды (0.7->1.4->2.8,
+// это .process_text-wrap, .process_img, .process_text-wrap. Первые два (text-wrap + img) остаются
+// на общем триггере секции, top 50% (середина экрана; был кратко сдвинут на 30% 2026-08-26,
+// откатили обратно тем же днём — "перебрали", 50% был правильным значением), обратимый:
+// onEnter -> play(), onLeaveBack -> reverse(). duration/stagger удвоены дважды (0.7->1.4->2.8,
 // 0.15->0.3->0.6) — по двум последовательным запросам замедлить вдвое, элементы появлялись
 // слишком резко.
+// 2026-08-26: третий элемент (второй .process_text-wrap, "When Paper Becomes Place") ВЫДЕЛЕН в
+// отдельный played timeline со СВОИМ ScrollTrigger — по прямому запросу "должен начать анимацию
+// когда пройдёт 30% от нижнего края экрана", т.е. start:'top 70%' (тот же принцип уже применён к
+// services_list-item/philosophy — см. историю), привязан к позиции САМОГО элемента, а не секции.
 (function () {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
@@ -1039,8 +1043,11 @@
 
   gsap.set(revealEls, { y: '2rem', opacity: 0 });
 
+  var mainEls = revealEls.slice(0, 2);
+  var thirdEl = revealEls[2];
+
   var revealTl = gsap.timeline({ paused: true });
-  revealTl.to(revealEls, {
+  revealTl.to(mainEls, {
     y: 0,
     opacity: 1,
     duration: 2.8,
@@ -1054,6 +1061,23 @@
     onEnter: function () { revealTl.play(); },
     onLeaveBack: function () { revealTl.reverse(); }
   });
+
+  if (thirdEl) {
+    var thirdTl = gsap.timeline({ paused: true });
+    thirdTl.to(thirdEl, {
+      y: 0,
+      opacity: 1,
+      duration: 2.8,
+      ease: 'power2.out'
+    });
+
+    ScrollTrigger.create({
+      trigger: thirdEl,
+      start: 'top 70%',
+      onEnter: function () { thirdTl.play(); },
+      onLeaveBack: function () { thirdTl.reverse(); }
+    });
+  }
 })();
 
 // Approach: 1) .approach_top **2026-08-25: теперь ПИНИТСЯ** — по прямому запросу "сначала
