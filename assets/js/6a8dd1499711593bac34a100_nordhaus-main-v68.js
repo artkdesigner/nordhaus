@@ -1374,6 +1374,14 @@
 // СВОЁМ собственном триггере (top 70% экрана) — независимо друг от друга, без общего stagger,
 // обратимо (onEnter -> play(), onLeaveBack -> reverse()). news_title теперь тоже часть этого
 // набора анимируемых элементов — по прямому запросу.
+// 2026-08-26 (мобилка): на мобилке карточки появлялись заметно позже, чем "как только вышли
+// из-за нижнего края экрана" — по прямому запросу. Десктоп ('top 70%') не тронут. Причина та же,
+// что уже чинили у services_list-item: `trigger: el` + `gsap.set(el, {y:'2rem'})` ДО создания
+// триггера — ScrollTrigger измеряет уже сдвинутый (на 2rem) rect, а не natural-позицию (мелко на
+// десктопе, но всё равно неверно). Фикс: natural-bottom читается ДО transform и на мобилке
+// (<992px) используется как АБСОЛЮТНЫЙ пиксель скролла (число, не строка) — при числовом start
+// сам `trigger` для позиции не используется (см. документацию ScrollTrigger), поэтому не нужен
+// отдельный стабильный элемент-якорь, как у services_list-item.
 (function () {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
@@ -1383,6 +1391,8 @@
   if (!elements.length) return;
 
   elements.forEach(function (el) {
+    var naturalBottom = el.getBoundingClientRect().bottom + window.scrollY;
+
     gsap.set(el, { y: '2rem', opacity: 0 });
 
     var tl = gsap.timeline({ paused: true });
@@ -1390,7 +1400,9 @@
 
     ScrollTrigger.create({
       trigger: el,
-      start: 'top 70%',
+      start: function () {
+        return window.innerWidth < 992 ? (naturalBottom - window.innerHeight) : 'top 70%';
+      },
       onEnter: function () { tl.play(); },
       onLeaveBack: function () { tl.reverse(); }
     });
@@ -1531,12 +1543,19 @@
 //    duration:2.4 (дважды удвоено 2026-08-25: 0.6 -> 1.2 -> 2.4, ощущалось слишком резким/быстрым
 //    оба раза). Проверено через data_style_tool, что у класса нет своего Designer-transform —
 //    yPercent можно применять напрямую (см. gotcha про composited transform в конце файла).
-// 3) .founder_footer — slide-up(2rem) + opacity, свой отдельный обратимый timeline, триггер
-//    top 90% на самом .founder_footer — НО играет только если img-wrap уже закончил появляться:
-//    флаг imgWrapRevealed выставляется в onComplete/onReverseComplete у intro-timeline (title+img-wrap),
-//    footer's onEnter проверяет флаг — если ещё не готов, просто помечает footerEntered=true и
-//    ждёт, пока intro-timeline не выставит флаг и не запустит footer сама (тот же принцип
-//    gating, что и imageWrapReady в Services).
+// 3) .founder_footer (содержит .founder_description + скрытую кнопку) — slide-up(2rem) +
+//    opacity, свой отдельный обратимый timeline, триггер top 90% на самом .founder_footer — НО
+//    играет только если img-wrap уже закончил появляться: флаг imgWrapRevealed выставляется в
+//    onComplete/onReverseComplete у intro-timeline (title+img-wrap), footer's onEnter проверяет
+//    флаг — если ещё не готов, просто помечает footerEntered=true и ждёт, пока intro-timeline не
+//    выставит флаг и не запустит footer сама (тот же принцип gating, что и imageWrapReady в
+//    Services).
+//    2026-08-26 (мобилка): по прямому запросу ("founder_description появляется очень поздно")
+//    триггер на мобилке (<992px) сдвинут на "как только пересёк нижнюю границу экрана" — тот же
+//    приём natural-bottom-до-transform + абсолютный пиксель, что только что применили к
+//    news_card (см. историю там же). Десктоп ('top 90%') не тронут. Gating по imgWrapRevealed
+//    не менялся — это отдельная, намеренная последовательность (footer после img-wrap), не часть
+//    этого запроса.
 (function () {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
@@ -1544,6 +1563,8 @@
   var imgWrap = document.querySelector('.founder_img-wrap');
   var footerEl = document.querySelector('.founder_footer');
   if (!titleEl || !imgWrap || !footerEl) return;
+
+  var footerNaturalBottom = footerEl.getBoundingClientRect().bottom + window.scrollY;
 
   gsap.set(titleEl, { y: '2rem', opacity: 0 });
   gsap.set(imgWrap, { opacity: 0, yPercent: 25 });
@@ -1577,12 +1598,23 @@
     onLeaveBack: function () { introTl.reverse(); }
   });
 
+  // 2026-08-26 (мобилка, продолжение): само по себе исправление позиции триггера выше почти не
+  // повлияло на реальную задержку — Playwright-проверка градуальным скроллом показала, что
+  // .founder_description уже геометрически виден на экране (~633px от верха при 844px высоты)
+  // ЗАДОЛГО до того, как opacity начинает расти: настоящая причина — gating на imgWrapRevealed,
+  // который выставляется только по onComplete у introTl (title 1.2s + img-wrap 2.4s = 3.6
+  // РЕАЛЬНЫХ секунды анимации, не скролла). На мобилке это и есть "очень поздно". По прямому
+  // запросу на мобилке (<992px) footer больше НЕ ждёт imgWrapRevealed — играет сразу по своему
+  // (уже исправленному выше) триггеру. Десктоп — gating не тронут, там это осталось намеренной
+  // последовательностью (title -> img-wrap -> footer).
   ScrollTrigger.create({
     trigger: footerEl,
-    start: 'top 90%',
+    start: function () {
+      return window.innerWidth < 992 ? (footerNaturalBottom - window.innerHeight) : 'top 90%';
+    },
     onEnter: function () {
       footerEntered = true;
-      if (imgWrapRevealed) footerTl.play();
+      if (imgWrapRevealed || window.innerWidth < 992) footerTl.play();
     },
     onLeaveBack: function () {
       footerEntered = false;
