@@ -2766,7 +2766,7 @@ figcaption {
   grid-row-gap: var(--_size---10);
   background-color: var(--bg);
   width: 100%;
-  height: 725vh;
+  height: 487.5vh;
   margin-top: -100vh;
   position: relative;
 }
