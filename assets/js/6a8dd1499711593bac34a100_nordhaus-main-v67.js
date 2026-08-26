@@ -225,6 +225,7 @@
   if (!navbar || !triggers.length) return;
 
   var echoSection = document.querySelector('.section_echo');
+  var horizonMask = document.querySelector('.horizon_mask');
   var echoActiveSlide = 0;
 
   // 2026-08-25 (фикс бага): .navbar_project-link (Silence/Horizon/Echo/Quiet Geometry/Studio/
@@ -247,11 +248,21 @@
     });
   }
 
+  // 2026-08-26 (фикс бага): .horizon_mask перестаёт быть видимым (opacity доходит до 0 через
+  // наездный fade на .section_echo, см. stages ниже) РАНЬШЕ, чем его bounding rect перестаёт
+  // формально "перекрывать" navbar — sticky-детач тянется ещё на 100vh (высота самой маски)
+  // ПОСЛЕ того, как Echo уже полностью наехал и стал виден. Из-за этого 1-й (и отчасти 2-й)
+  // слайд Echo ошибочно наследовал тёмный navbar от уже невидимой horizon_mask. Фикс: rect-
+  // перекрытие horizon_mask учитывается только пока она реально видима (opacity > 0).
   function update() {
     var navHeight = navbar.getBoundingClientRect().height;
     var isDark = triggers.some(function (el) {
       var r = el.getBoundingClientRect();
-      return r.top <= navHeight && r.bottom >= 0;
+      var overlapping = r.top <= navHeight && r.bottom >= 0;
+      if (overlapping && el === horizonMask && parseFloat(getComputedStyle(el).opacity) <= 0.02) {
+        return false;
+      }
+      return overlapping;
     });
     if (!isDark && echoSection && echoActiveSlide === 2) {
       var er = echoSection.getBoundingClientRect();
