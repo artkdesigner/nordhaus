@@ -584,7 +584,10 @@
 
         ScrollTrigger.create({
           trigger: section,
-          start: function () { return 'top+=' + ((i - 1) * window.innerHeight + 0.75 * window.innerHeight) + ' top'; },
+          // 2026-08-26: шаг скролла между слайдами сокращён на 50% (0.5x innerHeight вместо 1x),
+          // по аналогии с тем же фиксом в horizon (см. setupHorizonSlides выше) — только длительность
+          // ШАГА, не скорость самого перехода (duration/ease у gsap.to ниже не тронуты).
+          start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * 0.5) + ' top'; },
           onEnter: function () {
             gsap.to(cardSlide, { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
             gsap.to(bgSlide, { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
