@@ -3817,6 +3817,7 @@ figcaption {
     padding-top: var(--_size---70);
     padding-bottom: var(--_size---70);
   }.silence_inner {
+    padding-top: 0.625rem;
     padding-right: var(--_size---10);
     padding-left: var(--_size---10);
   }.horizon_mask {
