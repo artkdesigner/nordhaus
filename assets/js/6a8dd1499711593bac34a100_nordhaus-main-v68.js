@@ -805,9 +805,24 @@
       // карточка не пряталась обратно — по прямому запросу убран once, добавлен обратимый
       // paused-timeline (play()/reverse()), тот же принцип, что и у остальных reveal-анимаций
       // на сайте (process_content/idea rows и т.д.).
+      // 2026-08-26 (фикс бага): `trigger: item` + `start: 'bottom bottom'` на деле срабатывал
+      // заметно ПОЗЖЕ, чем "как только карточка появилась из-за нижнего края экрана" — по
+      // прямому запросу разобрались: gsap.set(yPercent:100) ниже сдвигает item вниз ДО того, как
+      // ScrollTrigger успевает измерить его rect, а getBoundingClientRect() отражает ТЕКУЩИЙ
+      // (уже трансформированный) transform, а не natural-позицию в потоке — тот же класс бага,
+      // что уже был у Founder-маски с ленивой картинкой (см. историю выше). Итог: триггер измерял
+      // rect, сдвинутый вниз на ~высоту самого item, и срабатывал на эту же величину позже.
+      // Фикс: natural-bottom каждого item читается ДО применения transform и используется как
+      // фиксированный пиксельный оффсет от .section-services (тот же приём 'top+=Npx top', что
+      // у horizon/echo/slider) — `trigger: item` больше не используется.
+      var sectionTop = section.getBoundingClientRect().top + window.scrollY;
+      var naturalBottoms = items.map(function (item) {
+        return item.getBoundingClientRect().bottom + window.scrollY;
+      });
+
       gsap.set(items, { yPercent: 100, opacity: 0 });
 
-      var triggers = items.map(function (item) {
+      var triggers = items.map(function (item, idx) {
         var tl = gsap.timeline({ paused: true });
         tl.to(item, {
           yPercent: 0,
@@ -817,8 +832,10 @@
         });
 
         return ScrollTrigger.create({
-          trigger: item,
-          start: 'bottom bottom',
+          trigger: section,
+          start: function () {
+            return 'top+=' + (naturalBottoms[idx] - sectionTop - window.innerHeight) + ' top';
+          },
           onEnter: function () { tl.play(); },
           onLeaveBack: function () { tl.reverse(); }
         });
