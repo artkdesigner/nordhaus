@@ -791,26 +791,32 @@
     },
 
     '(max-width: 991px)': function () {
-      gsap.set(items, { y: '2rem', opacity: 0 });
+      // 2026-08-26 (по прямому запросу): slide-up на 100% СОБСТВЕННОЙ высоты (yPercent, не
+      // фиксированные 2rem — тот же принцип, что уже применён к bottom_row/approach_circle, см.
+      // историю выше) + КАЖДЫЙ .services_list-item триггерится ПО СВОЕЙ позиции ('top 70%' —
+      // "прошёл 30% от нижней границы экрана"), а не общий триггер на весь .services_list со
+      // stagger — так карточки естественно раскрываются по мере скролла, а не все разом.
+      gsap.set(items, { yPercent: 100, opacity: 0 });
 
-      var trigger = ScrollTrigger.create({
-        trigger: list,
-        start: 'top 85%',
-        once: true,
-        onEnter: function () {
-          gsap.to(items, {
-            y: 0,
-            opacity: 1,
-            duration: 0.6,
-            ease: 'power2.out',
-            stagger: 0.1,
-            overwrite: true
-          });
-        }
+      var triggers = items.map(function (item) {
+        return ScrollTrigger.create({
+          trigger: item,
+          start: 'top 70%',
+          once: true,
+          onEnter: function () {
+            gsap.to(item, {
+              yPercent: 0,
+              opacity: 1,
+              duration: 0.6,
+              ease: 'power2.out',
+              overwrite: true
+            });
+          }
+        });
       });
 
       return function () {
-        trigger.kill();
+        triggers.forEach(function (t) { t.kill(); });
         gsap.set(items, { clearProps: 'transform,opacity' });
       };
     }
