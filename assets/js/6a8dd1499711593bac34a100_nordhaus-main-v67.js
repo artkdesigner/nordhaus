@@ -750,13 +750,24 @@
         clearProps: 'transform,opacity'
       });
 
+      // 2026-08-26: граница фазы image-wrap сдвинута 0.5 -> 0.1 по прямому запросу "забери от
+      // анимации services_image-wrap 100vh и отдай её второй половине". Секция 350vh, вьюпорт
+      // ~100vh -> реальный scrub-диапазон ('top top'->'bottom bottom') = 350vh-100vh = 250vh
+      // ровно (алгебраически точно, не зависит от фактической высоты вьюпорта в px). Старая
+      // граница 0.5 = 125vh на фазу image-wrap; process-наезд/затемнение (см. отдельный
+      // ScrollTrigger ниже, 'top bottom'->'top top' от .section-process) начинает перекрывать
+      // services ровно за 100vh ДО конца этого диапазона, т.е. с 150vh. При 125vh-фазе список
+      // .services_list-item успевал показаться только за 25vh (150-125) до начала затемнения —
+      // отсюда жалоба "почти сразу наезжает следующая секция". Новая граница 0.1 = 25vh на фазу
+      // image-wrap (забрали 100vh), список теперь виден чистым 125vh (25-150vh) до начала
+      // затемнения — та самая "вторая половина", которой отдали освобождённые 100vh.
       var scaleTrigger = ScrollTrigger.create({
         trigger: section,
         start: 'top top',
         end: 'bottom bottom',
         scrub: true,
         onUpdate: function (self) {
-          var localProgress = Math.min(self.progress / 0.5, 1);
+          var localProgress = Math.min(self.progress / 0.1, 1);
           gsap.set(imageWrap, { scale: 0.1 + 0.9 * localProgress });
           if (localProgress >= 1 && !imageWrapReady) {
             imageWrapReady = true;
