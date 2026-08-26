@@ -866,23 +866,6 @@
   gsap.set(textWraps, { y: '2rem', opacity: 0 });
   gsap.set(rows, { y: '2rem', opacity: 0 });
 
-  var masterTl = gsap.timeline({
-    scrollTrigger: {
-      trigger: section,
-      start: 'top top',
-      end: 'bottom bottom',
-      // 2026-08-26: scrub:true -> scrub:0.5 по прямому запросу — при быстром скроле
-      // (особенно фаза title-wrap, узкое окно 0.25-0.50) анимация "телепортировалась"
-      // мгновенно к текущей позиции. Числовой scrub даёт лёгкое сглаживание/инерцию
-      // без потери scroll-driven обратимости.
-      scrub: 0.5
-    }
-  });
-
-  masterTl
-    // фаза idea_bottom: окно 0.65-1.0 (span 0.35), 8 элементов
-    .to(rows, { y: 0, opacity: 1, duration: 0.15, ease: 'none', stagger: 0.02857 }, 0.65);
-
   // 2026-08-26: title-wrap ВЫНЕСЕН из master-таймлайна в свой отдельный scrub-триггер, привязанный
   // к .idea_top (обёртка 4 title-wrap + 3 text-wrap), а не к прогрессу всей секции — по прямому
   // запросу "анимация должна заканчиваться к середине экрана, а не к верхней части". Раньше фаза
@@ -928,6 +911,26 @@
       }
     });
     textTl.to(textWraps, { y: 0, opacity: 1, duration: 1, ease: 'none', stagger: 0.2 });
+
+    // 2026-08-26: bottom_row тоже был на старом section-wide masterTl (метка 0.65 от прогресса
+    // ВСЕЙ секции) — после того как title-wrap/text-wrap переехали на свои .idea_top-триггеры,
+    // metка 0.65 больше ни с чем не синхронизирована (другой trigger, другой scroll-диапазон), из-
+    // за чего bottom_row стал заметно отставать от предыдущих анимаций. По прямому запросу —
+    // ОТДЕЛЬНЫЙ триггер на тот же .idea_top, стартующий ровно там, где заканчивается text-wrap
+    // (start:'top 35%' — граница textTl), тот же безопасный приём, что и у text-wrap выше (не
+    // добавлять в чужой timeline без позиции — см. комментарий про фикс регрессии). .idea_top
+    // здесь используется только как scroll-позиционный ориентир — bottom_row физически лежит в
+    // .idea_bottom, соседнем блоке, но это нормально (тот же приём применялся и раньше на этом
+    // сайте, см. историю ride-over триггеров).
+    var rowsTl = gsap.timeline({
+      scrollTrigger: {
+        trigger: ideaTop,
+        start: 'top 35%',
+        end: 'top 10%',
+        scrub: 0.5
+      }
+    });
+    rowsTl.to(rows, { y: 0, opacity: 1, duration: 1, ease: 'none', stagger: 0.1 });
   }
 })();
 
