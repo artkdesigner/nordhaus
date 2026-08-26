@@ -3972,8 +3972,6 @@ figcaption {
     display: flex;
   }.founder_description {
     max-width: 28rem;
-  }.founder_mask {
-    display: none;
   }.footer {
     padding: var(--_size---150) var(--_size---10) var(--_size---10);
     grid-column-gap: var(--_size---40);
