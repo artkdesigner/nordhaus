@@ -869,8 +869,6 @@
   });
 
   masterTl
-    // фаза text-wrap: окно 0.50-0.65 (span 0.15), 3 элемента
-    .to(textWraps, { y: 0, opacity: 1, duration: 0.09, ease: 'none', stagger: 0.03 }, 0.5)
     // фаза idea_bottom: окно 0.65-1.0 (span 0.35), 8 элементов
     .to(rows, { y: 0, opacity: 1, duration: 0.15, ease: 'none', stagger: 0.02857 }, 0.65);
 
@@ -897,7 +895,14 @@
     titleTl
       .to(titleWraps, { yPercent: 0, duration: 1, ease: 'none', stagger: 0.2 }, 0)
       .to(titles, { y: 0, opacity: 1, duration: 1, ease: 'none', stagger: 0.2 }, 0)
-      .to(titleInners, { yPercent: 0, duration: 1, ease: 'none', stagger: 0.2 }, 0);
+      .to(titleInners, { yPercent: 0, duration: 1, ease: 'none', stagger: 0.2 }, 0)
+      // 2026-08-26: text-wrap перенесён сюда же (был на masterTl, окно 0.50-0.65 доли ВСЕЙ секции —
+      // после выноса title-wrap на свой trigger эти доли больше не были синхронизированы друг с
+      // другом) по прямому запросу "должна начинаться сразу после title-wrap". Без явной позиции
+      // (3-й аргумент) .to() в GSAP по умолчанию встаёт СРАЗУ после конца предыдущей анимации в
+      // таймлайне — здесь это гарантирует старт text-wrap ровно там, где заканчивается самый
+      // долгий из трёх title-wrap твинов, без разрыва.
+      .to(textWraps, { y: 0, opacity: 1, duration: 1, ease: 'none', stagger: 0.2 });
   }
 })();
 
