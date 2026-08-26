@@ -400,15 +400,18 @@
   })();
 
   // Philosophy: reveal контента — сначала прямые дети .philosophy_top (.philosophy_top-left,
-  // .philosophy_top-right), затем прямые дети .philosophy_bottom (6x .bottom_row — тот же класс,
-  // что и в Idea, поэтому селектор СКОУПЛЕН через '.philosophy_bottom .bottom_row', не глобальный).
-  // Добавлено 2026-08-25 по прямому запросу. Обе группы — обратимые played timeline (slide-up 2rem
-  // + opacity, duration:0.6, ease:power2.out, stagger:0.1 внутри группы), триггер на самом
-  // контейнере группы, 'top 50%' ("когда находятся на середине экрана"). Группа (2) гейтится на
-  // завершение группы (1) — тот же безопасный played-timeline gating handshake (titleRevealed/
-  // textEntered-стиль), что уже используется для Idea (title-wrap -> text-wrap -> bottom_row) и
-  // Founder (title -> img-wrap -> footer): played-таймлайны можно безопасно гейтить, scrub — нет
-  // (см. историю багов у Idea text-wrap выше).
+  // .philosophy_top-right), затем содержимое .philosophy_bottom (6x .bottom_row-content — тот же
+  // класс bottom_row, что и в Idea, поэтому селектор СКОУПЛЕН через '.philosophy_bottom ...', не
+  // глобальный). Добавлено 2026-08-25 по прямому запросу.
+  // 2026-08-26: topItems (.philosophy_top-left/-right) раньше уезжали на фиксированные y:'2rem' —
+  // на фоне длинного параграфа справа это визуально читалось как "просто opacity". Заменено на
+  // yPercent:50 (slide-up на 50% собственной высоты каждого элемента).
+  // 2026-08-26 (ревизия): bottom-часть переписана с единого группового триггера (весь
+  // .philosophy_bottom, stagger по всем 6 рядам разом) на ИНДИВИДУАЛЬНЫЙ триггер для каждого
+  // .bottom_row-content — по прямому запросу, чтобы каждый ряд проигрывал свою анимацию по своему
+  // собственному скроллу, когда прошёл 30% от нижней границы экрана (start: 'top 70%' — верх
+  // элемента доходит до линии в 70% от верха вьюпорта = 30% от низа). Групповой gating-хендшейк
+  // с topTl (bottomEntered/topRevealed) снят — больше не применим к per-item триггерам.
   (function () {
     if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
@@ -417,27 +420,14 @@
     if (!top || !bottom) return;
 
     var topItems = Array.prototype.slice.call(top.children);
-    var bottomItems = Array.prototype.slice.call(bottom.querySelectorAll('.bottom_row'));
+    var bottomItems = Array.prototype.slice.call(bottom.querySelectorAll('.bottom_row-content'));
     if (!topItems.length || !bottomItems.length) return;
 
-    gsap.set(topItems, { y: '2rem', opacity: 0 });
+    gsap.set(topItems, { yPercent: 50, opacity: 0 });
     gsap.set(bottomItems, { y: '2rem', opacity: 0 });
 
-    var topRevealed = false;
-    var bottomEntered = false;
-
-    var bottomTl = gsap.timeline({ paused: true });
-    bottomTl.to(bottomItems, { y: 0, opacity: 1, duration: 1, ease: 'power1.out', stagger: 0.12 });
-
-    var topTl = gsap.timeline({
-      paused: true,
-      onComplete: function () {
-        topRevealed = true;
-        if (bottomEntered) bottomTl.play();
-      },
-      onReverseComplete: function () { topRevealed = false; }
-    });
-    topTl.to(topItems, { y: 0, opacity: 1, duration: 1, ease: 'power1.out', stagger: 0.12 });
+    var topTl = gsap.timeline({ paused: true });
+    topTl.to(topItems, { yPercent: 0, opacity: 1, duration: 1, ease: 'power1.out', stagger: 0.12 });
 
     // 2026-08-25 (ревизия): start сдвинут с 'top 50%' на 'top 80%' — появление начинается раньше,
     // как только секция входит в нижнюю часть экрана, а не когда доходит до середины. duration
@@ -449,17 +439,16 @@
       onLeaveBack: function () { topTl.reverse(); }
     });
 
-    ScrollTrigger.create({
-      trigger: bottom,
-      start: 'top 80%',
-      onEnter: function () {
-        bottomEntered = true;
-        if (topRevealed) bottomTl.play();
-      },
-      onLeaveBack: function () {
-        bottomEntered = false;
-        bottomTl.reverse();
-      }
+    bottomItems.forEach(function (item) {
+      var itemTl = gsap.timeline({ paused: true });
+      itemTl.to(item, { y: 0, opacity: 1, duration: 0.8, ease: 'power1.out' });
+
+      ScrollTrigger.create({
+        trigger: item,
+        start: 'top 70%',
+        onEnter: function () { itemTl.play(); },
+        onLeaveBack: function () { itemTl.reverse(); }
+      });
     });
   })();
 
