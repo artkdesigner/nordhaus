@@ -4191,6 +4191,8 @@ figcaption {
     width: auto;
   }.slide-content {
     width: 20.9375rem;
+  }.slider_content-grid {
+    width: 20.9375rem;
   }.news_card {
     grid-column-gap: var(--_size---10);
   }.news_card-date {
