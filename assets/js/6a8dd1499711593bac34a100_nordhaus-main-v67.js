@@ -1047,14 +1047,23 @@
   var middle = document.querySelector('.approach_middle');
   var bottom = document.querySelector('.approach_bottom');
 
+  // 2026-08-26 (фикс бага): pin+runway (200vh) раньше применялся БЕЗ учёта брейкпоинта — на
+  // планшете/мобилке это читалось как "пропасть" между title и следующими элементами (200vh
+  // скрола ради побуквенного заполнения текста несоразмерно много на короткой странице). По
+  // прямому запросу — на планшете/мобилке title НЕ пинится вообще, секция скроллится обычным
+  // потоком, а заполнение букв — обычный scrub, привязанный к самому titleEl (не к runway,
+  // которого больше нет), стартующий с середины экрана ('top 50%'). Обёртка .approach_top-pin
+  // всё ещё создаётся (упрощает код — один путь DOM-структуры на все брейкпоинты), но её sticky/
+  // height-стили и runway-стили на approachTop применяются ТОЛЬКО на десктопе — на
+  // планшете/мобилке pin остаётся обычным блоком без transform/sticky, что и даёт "проскроллить
+  // как обычно" + натуральный отступ из CSS grid-row-gap секции (тот же, что и на десктопе,
+  // просто без раздутия runway).
+  var isDesktop = window.matchMedia('(min-width: 992px)').matches;
+
   if (approachTop) {
     var pin = document.createElement('div');
     pin.className = 'approach_top-pin';
-    pin.style.position = 'sticky';
-    pin.style.top = '0';
-    pin.style.height = '100vh';
     pin.style.width = '100%';
-    pin.style.overflow = 'hidden';
     pin.style.display = 'flex';
     pin.style.flexDirection = 'column';
     pin.style.justifyContent = 'flex-start';
@@ -1064,9 +1073,16 @@
     while (approachTop.firstChild) pin.appendChild(approachTop.firstChild);
     approachTop.appendChild(pin);
 
-    approachTop.style.height = '200vh';
-    approachTop.style.display = 'block';
-    approachTop.style.position = 'relative';
+    if (isDesktop) {
+      pin.style.position = 'sticky';
+      pin.style.top = '0';
+      pin.style.height = '100vh';
+      pin.style.overflow = 'hidden';
+
+      approachTop.style.height = '200vh';
+      approachTop.style.display = 'block';
+      approachTop.style.position = 'relative';
+    }
   }
 
   var titleEl = document.querySelector('.approach_title');
@@ -1093,12 +1109,9 @@
         opacity: 1,
         ease: 'none',
         stagger: 0.05,
-        scrollTrigger: {
-          trigger: approachTop || titleEl,
-          start: 'top top',
-          end: 'bottom bottom',
-          scrub: true
-        }
+        scrollTrigger: isDesktop
+          ? { trigger: approachTop || titleEl, start: 'top top', end: 'bottom bottom', scrub: true }
+          : { trigger: titleEl, start: 'top 50%', end: '+=50%', scrub: true }
       });
     }
   }
