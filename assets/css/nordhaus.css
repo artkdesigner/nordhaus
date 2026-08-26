@@ -3925,10 +3925,7 @@ figcaption {
   }.slider_content-grid {
     grid-column-gap: var(--_size---10);
     grid-row-gap: var(--_size---10);
-    display: flex;
-  }.slide-content {
-    flex: none;
-    width: 27.75rem;
+    grid-template-columns: 1fr 1fr;
   }.section-news {
     padding: var(--_size---70) var(--_size---10);
     grid-column-gap: var(--_size---30);
