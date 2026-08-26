@@ -3961,26 +3961,23 @@ figcaption {
     border-left-width: 0;
   }.section-founder {
     height: 200vh;
-    margin-bottom: var(--_size---70);
   }.founder_pin {
     height: 100vh;
     padding-right: var(--_size---10);
     padding-left: var(--_size---10);
     grid-column-gap: var(--_size---10);
     grid-row-gap: var(--_size---10);
+    justify-content: center;
     position: sticky;
     top: 0;
   }.founder_title {
     max-width: 25rem;
     font-size: 1.5rem;
   }.founder_img-wrap {
-    flex: 1;
-    min-height: 0;
-    container-type: size;
-  }.founder_mask {
-    width: min(100cqw, 100cqh);
-    height: min(100cqw, 100cqh);
-    margin: auto;
+    flex: 0 0 auto;
+    width: 100%;
+    aspect-ratio: 1;
+    height: auto;
   }.founder_footer {
     flex-flow: column;
     display: flex;
