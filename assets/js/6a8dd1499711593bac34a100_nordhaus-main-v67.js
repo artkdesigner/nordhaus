@@ -1198,6 +1198,18 @@
     return i === 1 ? vh * 0.5 : i * vh;
   }
 
+  // 2026-08-26: на планшете/мобилке .slider_content-grid — горизонтальный flex-скролл (см. CSS,
+  // .slide-content шириной 18.75rem), а не grid — по прямому запросу активный .slide-content
+  // должен "подъезжать" к левой границе контейнера при смене слайда. На десктопе контейнер не
+  // скроллится (это grid, не переполняется), поэтому здесь просто no-op.
+  var contentGrid = document.querySelector('.slider_content-grid');
+  function scrollActiveIntoView(el) {
+    if (window.innerWidth >= 992 || !contentGrid || !el) return;
+    var target = el.getBoundingClientRect().left - contentGrid.getBoundingClientRect().left + contentGrid.scrollLeft;
+    contentGrid.scrollTo({ left: target, behavior: 'smooth' });
+  }
+  scrollActiveIntoView(contents[0]);
+
   for (var i = 1; i < count; i++) {
     (function (i) {
       ScrollTrigger.create({
@@ -1209,6 +1221,7 @@
           imgs[i - 1].classList.remove('current');
           imgs[i - 1].classList.add('exited');
           imgs[i].classList.add('current');
+          scrollActiveIntoView(contents[i]);
         },
         onLeaveBack: function () {
           contents[i].classList.remove('current');
@@ -1216,6 +1229,7 @@
           imgs[i].classList.remove('current');
           imgs[i - 1].classList.remove('exited');
           imgs[i - 1].classList.add('current');
+          scrollActiveIntoView(contents[i - 1]);
         }
       });
     })(i);

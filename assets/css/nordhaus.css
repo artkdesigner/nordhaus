@@ -3928,7 +3928,12 @@ figcaption {
   }.slider_content-grid {
     grid-column-gap: var(--_size---10);
     grid-row-gap: var(--_size---10);
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+  }.slide-content {
+    flex: none;
+    width: 18.75rem;
   }.section-news {
     padding: var(--_size---70) var(--_size---10);
     grid-column-gap: var(--_size---30);
@@ -4166,8 +4171,6 @@ figcaption {
     padding-left: var(--_size---20);
   }.slider_title {
     right: var(--_size---10);
-  }.slide-content {
-    width: 100%;
   }.news_card {
     grid-column-gap: var(--_size---10);
   }.news_card-date {
