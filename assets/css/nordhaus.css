@@ -3405,6 +3405,10 @@ figcaption {
   display: flex;
 }
 
+.slide_location > div:last-child {
+  text-align: right;
+}
+
 .section-news {
   z-index: 10;
   padding: var(--_size---150) var(--_size---20);
