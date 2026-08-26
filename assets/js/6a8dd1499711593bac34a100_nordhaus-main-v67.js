@@ -1238,11 +1238,16 @@
   // .slide-content шириной 18.75rem), а не grid — по прямому запросу активный .slide-content
   // должен "подъезжать" к левой границе контейнера при смене слайда. На десктопе контейнер не
   // скроллится (это grid, не переполняется), поэтому здесь просто no-op.
+  // **Правка того же дня**: нативный behavior:'smooth' не даёт контроля над длительностью и
+  // ощущался слишком резким рядом с самой сменой слайда. По прямому запросу "уравнять скорость
+  // со скоростью смены слайдов" — заменено на gsap.to(scrollLeft), duration:1/ease:'power2.inOut',
+  // та же скорость/кривая, что и у .slider_img (CSS transition transform 1s cubic-bezier), и та
+  // же связка duration:1/power2.inOut, что используется для GSAP-переходов слайдов в horizon/echo.
   var contentGrid = document.querySelector('.slider_content-grid');
   function scrollActiveIntoView(el) {
     if (window.innerWidth >= 992 || !contentGrid || !el) return;
     var target = el.getBoundingClientRect().left - contentGrid.getBoundingClientRect().left + contentGrid.scrollLeft;
-    contentGrid.scrollTo({ left: target, behavior: 'smooth' });
+    gsap.to(contentGrid, { scrollLeft: target, duration: 1, ease: 'power2.inOut', overwrite: true });
   }
   scrollActiveIntoView(contents[0]);
 
