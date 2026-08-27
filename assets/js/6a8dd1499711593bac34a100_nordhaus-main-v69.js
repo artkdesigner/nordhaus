@@ -910,11 +910,15 @@
   // секции/паддингов, ничего пересчитывать вручную не нужно.
   var ideaTop = section.querySelector('.idea_top');
   if (ideaTop) {
+    // 2026-08-27: end 'top 50%' -> 'top 75%' по прямому запросу — "Space" должен доезжать до
+    // своей позиции раньше, когда .idea_top доходит до 75% высоты экрана от верха (а не до
+    // середины). start не тронут ('top bottom'). textTl ниже сдвинут на ту же границу
+    // ('top 75%'), чтобы text-wrap по-прежнему стартовал ровно там, где заканчивается title-wrap.
     var titleTl = gsap.timeline({
       scrollTrigger: {
         trigger: ideaTop,
         start: 'top bottom',
-        end: 'top 50%',
+        end: 'top 75%',
         scrub: 0.5
       }
     });
@@ -937,7 +941,7 @@
     var textTl = gsap.timeline({
       scrollTrigger: {
         trigger: ideaTop,
-        start: 'top 50%',
+        start: 'top 75%',
         end: 'top 35%',
         scrub: 0.5
       }
