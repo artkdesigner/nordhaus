@@ -533,11 +533,12 @@
 
       ScrollTrigger.create({
         trigger: section,
-        // 2026-08-26: шаг скролла между слайдами сокращён на 50% (0.5x innerHeight
-        // вместо 1x) по прямому запросу — только длительность ШАГА, не скорость
+        // 2026-08-26: шаг сокращён до 0.5x; 2026-08-27: по прямому запросу поднят до 0.75x
+        // innerHeight (75vh на слайд) на десктопе. Только длительность ШАГА, не скорость
         // самого перехода (duration/ease у gsap.to ниже не тронуты). На планшете/мобилке
         // (<992px) фактор зафиксирован на 1 — см. tabletMobileStep выше.
-        start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * tabletMobileStep(0.5)) + ' top'; },
+        // Высота .section_horizon пересчитана под 0.75: 606.25vh (см. CSS).
+        start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * tabletMobileStep(0.75)) + ' top'; },
         onEnter: function () {
           gsap.to(slide, { yPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
           gsap.to(slides[i - 1], { yPercent: -10, duration: 1, ease: 'power2.inOut', overwrite: true });
@@ -587,11 +588,12 @@
 
         ScrollTrigger.create({
           trigger: section,
-          // 2026-08-26: шаг сокращён на 50% (0.5x), затем по прямому запросу "шаг стал слишком
-          // коротким" увеличен на 25% сверху этого — 0.5*1.25=0.625x innerHeight. Только длительность
-          // ШАГА, не скорость самого перехода (duration/ease у gsap.to ниже не тронуты). На планшете/
-          // мобилке (<992px) фактор зафиксирован на 1 — см. tabletMobileStep выше.
-          start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * tabletMobileStep(0.625)) + ' top'; },
+          // 2026-08-26: 0.5x -> 0.625x; 2026-08-27: по прямому запросу поднят до 0.75x innerHeight
+          // (75vh на слайд) на десктопе, заодно с horizon. Только длительность ШАГА, не скорость
+          // самого перехода (duration/ease у gsap.to ниже не тронуты). На планшете/мобилке
+          // (<992px) фактор зафиксирован на 1 — см. tabletMobileStep выше.
+          // Высота .section_echo пересчитана под 0.75: 406.25vh (109.375+275 -> 131.25+275, см. CSS).
+          start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * tabletMobileStep(0.75)) + ' top'; },
           onEnter: function () {
             gsap.to(cardSlide, { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
             gsap.to(bgSlide, { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
@@ -849,36 +851,38 @@
   });
 })();
 
-// Idea: reveal контента секции. Секция осталась плавным потоком (без явной высоты) —
-// предыдущая версия с .idea_title-pin/-runway была откачена: overflow:hidden 100vh-бокс обрезал
-// двухстрочный заголовок (огромный font-size), а 250vh раннвея создавали пустой провал в скроле.
-// **2026-08-25 (переписано на чистый scrub)**: по прямому запросу — "секция доходит до 25% от
-// верхнего края - запускается анимация title-wrap, после них text-wrap, и дальше уже idea_bottom,
-// всё зависит от скрола". ОДИН master-timeline, привязанный к ScrollTrigger (trigger: section,
-// 'top top' -> 'bottom bottom', scrub:true) — три фазы идут ПОСЛЕДОВАТЕЛЬНО внутри одной шкалы
-// прогресса 0..1 (позиции — доли общего скрола секции, не секунды):
-//   0.00-0.25  — простой (ничего не происходит, секция ещё "въезжает")
-//   0.25-0.50  — .idea_title-wrap (4шт, слайд снизу) + .idea_title (подъём+opacity) +
-//                .idea_title-inner (раскрытие маски) — все три синхронно ('<'), стаггер внутри фазы
-//   0.50-0.65  — .idea_top-text-wrap (3шт)
-//   0.65-1.00  — .bottom_row внутри .idea_bottom (8шт)
-// ease:'none' на всех твинах — стандарт для scrub-таймлайнов на этом сайте (линейная зависимость
-// от позиции скрола, а не "своя" кривая ускорения, которая на scrub всё равно не считывается как
-// анимация со своим временем). Раньше это были played-таймлайны с гейтинг-флагами именно потому,
-// что предыдущий запрос был "НЕ привязывать к скролу" — теперь запрос обратный, поэтому чистый
-// scrub тут корректен, а не "то, от чего раньше отказались": условия изменились.
+// Idea: заголовок «From Idea to Space» пинится, остальной контент секции появляется после.
+// **2026-08-27 — архитектура пересобрана по прямому запросу.** 4 слова .idea_title-wrap
+// выносятся в рантайм-обёртку .idea_title-pin (runway) > .idea_title-stage (position:sticky;
+// top:0; height:100vh; overflow:hidden; display:grid 4 колонки). На ДЕСКТОПЕ runway = 150vh:
+// пока стейдж запинен, .idea_title-wrap проделывают свою анимацию (yPercent:400 -> 0 + подъём
+// .idea_title + маска .idea_title-inner), scrub привязан к самому runway ('top top' ->
+// 'bottom bottom' => финиш ровно к моменту открепления). Когда pin открепился — дальше ОБЫЧНЫМ
+// ПОТОКОМ: .idea_top (теперь только 3 текстовые колонки) — scrub-reveal по своему триггеру,
+// затем .bottom_row в .idea_bottom — каждый по своему 'top 70%' с гейтом textRevealed.
+// Планшет/мобилка (<992px): pin НЕ включается (как у Approach/Services/Founder) — стейдж
+// остаётся обычным блоком (1 колонка), заголовок появляется коротким scrub'ом.
+// isDesktop проверяется один раз (не реактивно к resize) — тот же приём, что у DOM-перестройки
+// в Approach; сайт не рассчитан на смену брейкпоинта без перезагрузки.
+// История прежних подходов (section-wide master-timeline; цепочка из 3 .idea_top-scoped scrub'ов;
+// ещё раньше — .idea_title-pin/-runway с откатом из-за обрезки двухстрочного заголовка) — в git.
+// В этой версии заголовок однострочный (каждое слово в своей колонке грид-стейджа) — обрезки нет.
 (function () {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
   var section = document.querySelector('.section-idea');
   if (!section) return;
 
+  var ideaTop = section.querySelector('.idea_top');
   var titleWraps = Array.prototype.slice.call(section.querySelectorAll('.idea_title-wrap'));
   var titles = Array.prototype.slice.call(section.querySelectorAll('.idea_title'));
   var textWraps = Array.prototype.slice.call(section.querySelectorAll('.idea_top-text-wrap'));
   var rows = Array.prototype.slice.call(section.querySelectorAll('.bottom_row'));
-  if (!titles.length) return;
+  if (!titles.length || !ideaTop) return;
 
+  var isDesktop = window.matchMedia('(min-width: 992px)').matches;
+
+  // маска на каждое слово: .idea_title (overflow:hidden) > .idea_title-inner (уезжает вниз на 100%)
   var titleInners = titles.map(function (title) {
     var inner = document.createElement('div');
     inner.className = 'idea_title-inner';
@@ -888,86 +892,87 @@
     return inner;
   });
 
-  // 2026-08-25: y:'100vh' -> yPercent:100 по прямому запросу ("слишком резко") — yPercent
-  // отталкивается от РЕАЛЬНОЙ высоты самого элемента, а не от вьюпорта.
-  // 2026-08-27: yPercent:100 -> yPercent:400 по прямому запросу — .idea_title-wrap по-прежнему
-  // приезжает СНИЗУ (как раньше), но путь длиннее: от 400% собственной высоты по Y до 0%.
-  gsap.set(titleWraps, { yPercent: 400 });
+  // --- рантайм pin-обёртка для заголовка (без Designer-элемента, как .approach_top-pin) ---
+  var pin = document.createElement('div');
+  pin.className = 'idea_title-pin';
+  pin.style.width = '100%';
+  pin.style.position = 'relative';
+
+  var stage = document.createElement('div');
+  stage.className = 'idea_title-stage';
+  stage.style.display = 'grid';
+  stage.style.width = '100%';
+  stage.style.columnGap = 'var(--_size---20)';
+  stage.style.gridTemplateColumns = isDesktop ? 'repeat(4, 1fr)' : '1fr';
+  stage.style.alignItems = 'start';
+
+  titleWraps.forEach(function (w) { stage.appendChild(w); }); // забираем слова из .idea_top
+  pin.appendChild(stage);
+  section.insertBefore(pin, ideaTop);
+
+  if (isDesktop) {
+    pin.style.height = '150vh';
+    stage.style.position = 'sticky';
+    stage.style.top = '0';
+    stage.style.height = '100vh';
+    stage.style.overflow = 'hidden';
+    stage.style.alignContent = 'center'; // единственный ряд грида по центру 100vh
+  }
+
+  // .idea_top теперь только 3 текстовые колонки — сбрасываем Webflow-грид (был 1fr 1fr +
+  // именные #w-node grid-area на колонках 3-5, рассчитанные под слова заголовка)
+  ideaTop.style.gridTemplateColumns = isDesktop ? 'repeat(3, 1fr)' : '1fr';
+  ideaTop.style.gridTemplateRows = 'auto';
+  textWraps.forEach(function (tw) { tw.style.gridArea = 'auto'; });
+
+  // --- начальные состояния ---
+  // .idea_title-wrap приезжает СНИЗУ. 2026-08-27: в запиненной версии 400% давало ~20vh пустого
+  // экрана в начале пина (слова далеко внизу + маска) — снижено до 200% (визуально приезжают
+  // раньше, но путь всё ещё заметно длиннее исходных 100%). Число легко менять.
+  gsap.set(titleWraps, { yPercent: 200 });
   gsap.set(titles, { y: '4rem', opacity: 0 });
   gsap.set(titleInners, { yPercent: 100 });
   gsap.set(textWraps, { y: '2rem', opacity: 0 });
   gsap.set(rows, { y: '2rem', opacity: 0 });
 
-  // 2026-08-26: title-wrap ВЫНЕСЕН из master-таймлайна в свой отдельный scrub-триггер, привязанный
-  // к .idea_top (обёртка 4 title-wrap + 3 text-wrap), а не к прогрессу всей секции — по прямому
-  // запросу "анимация должна заканчиваться к середине экрана, а не к верхней части". Раньше фаза
-  // была долей (0.25-0.50) от прогресса ВСЕЙ секции ('top top'->'bottom bottom' её собственных
-  // ~1795px высоты) — а .idea_title-wrap лежит всего ~170px от начала .idea_top, поэтому её
-  // "естественная" позиция достигает середины экрана уже на ~13% прогресса секции; докрутка до 50%
-  // раньше означала кучу лишнего скрола, за который title-wrap успевал уехать к самому верху экрана
-  // до срабатывания. Прямой trigger на сам .idea_top с end:'top 50%' завязан на его РЕАЛЬНУЮ позицию
-  // во вьюпорте, а не на долю чужой (гораздо большей) секции — устойчиво к будущим изменениям высоты
-  // секции/паддингов, ничего пересчитывать вручную не нужно.
-  var ideaTop = section.querySelector('.idea_top');
   if (ideaTop) {
-    // 2026-08-27 (по скриншоту от пользователя): end 'top 75%' -> 'top 25%'. Анимация
-    // .idea_title-wrap идёт от момента, когда верх .idea_top пересекает нижнюю границу экрана
-    // ('top bottom', не тронут), и заканчивается, когда верх .idea_top доходит до 25% высоты
-    // экрана от верхнего края. Вся эта дистанция уходит на путь title-wrap (-400% -> 0% по Y).
-    // textTl и гейт rows ниже сдвинуты на ту же новую границу ('top 25%'), чтобы цепочка
-    // title -> text -> rows осталась без разрыва (см. историю ниже).
+    // --- 1. ЗАГОЛОВОК: scrub. Десктоп — привязан к самому runway (.idea_title-pin): 'top top'
+    //    -> 'bottom bottom' => пока стейдж запинен, слова доезжают, финиш ровно к открепу.
+    //    Мобилка — короткий scrub по стейджу (pin не активен). yPercent:400 => 0 + подъём
+    //    .idea_title + раскрытие маски .idea_title-inner, всё синхронно с 'top', стаггер 0.2.
     var titleTl = gsap.timeline({
-      scrollTrigger: {
-        trigger: ideaTop,
-        start: 'top bottom',
-        end: 'top 25%',
-        scrub: 0.5
-      }
+      scrollTrigger: isDesktop
+        ? { trigger: pin, start: 'top top', end: 'bottom bottom', scrub: 0.5 }
+        : { trigger: stage, start: 'top 80%', end: 'top 30%', scrub: 0.5 }
     });
     titleTl
       .to(titleWraps, { yPercent: 0, duration: 1, ease: 'none', stagger: 0.2 }, 0)
       .to(titles, { y: 0, opacity: 1, duration: 1, ease: 'none', stagger: 0.2 }, 0)
       .to(titleInners, { yPercent: 0, duration: 1, ease: 'none', stagger: 0.2 }, 0);
 
-    // 2026-08-26 (фикс регрессии): text-wrap раньше был ДОБАВЛЕН прямо в titleTl (без явной
-    // позиции — GSAP ставит его сразу после конца предыдущих твинов). Это СЛОМАЛО title-wrap:
-    // scrub привязывает прогресс триггера (0..1 от 'top bottom' до 'top 50%') к ДОЛЕ ОБЩЕЙ
-    // длительности таймлайна — добавление text-wrap увеличило общую длительность (1.6 -> 3.0), и
-    // title-wrap стал заканчиваться на ~53% окна вместо 100%, т.е. .idea_top ещё не успевал
-    // доехать до 50vh, когда title-wrap уже был "готов" — сломало тщательно проверенное "финиш
-    // строго на середине экрана". Правильный фикс: text-wrap — ОТДЕЛЬНЫЙ триггер на ТОТ ЖЕ
-    // .idea_top, стартующий ровно там, где заканчивается title-wrap (start:'top 50%' — граница
-    // предыдущего триггера), с собственным чуть более коротким окном. Так title-wrap остаётся
-    // полностью нетронутым (свой собственный триггер, свой полный 0..1), а text-wrap стартует без
-    // разрыва сразу после. (2026-08-27: границы цепочки сдвинуты — title 'top bottom'->'top 25%',
-    // text 'top 25%'->'top 10%', гейт rows 'top 10%'.)
+    // --- 2. ТЕКСТОВЫЕ КОЛОНКИ: после открепления pin, обычным потоком. Триггер на .idea_top
+    //    (теперь это контейнер только 3 колонок), scrub от входа снизу до ~середины экрана.
     var textTl = gsap.timeline({
       scrollTrigger: {
         trigger: ideaTop,
-        start: 'top 25%',
-        end: 'top 10%',
+        start: 'top 85%',
+        end: 'top 45%',
         scrub: 0.5
       }
     });
     textTl.to(textWraps, { y: 0, opacity: 1, duration: 1, ease: 'none', stagger: 0.2 });
 
-    // 2026-08-26 (переписано с scrub на played+gating, по прямому запросу): bottom_row теперь
-    // запускается по СВОЕЙ собственной позиции — когда КАЖДЫЙ ряд доходит до 70% высоты экрана
-    // ('top 70%'), а не долей прогресса .idea_top. Условие "не раньше text-wrap" реализовано тем
-    // же проверенным-безопасным приёмом, что уже использовался в истории этой секции (см. историю
-    // title-wrap/text-wrap выше по файлу, 2026-08-25): флаг textRevealed + очередь pendingRows —
-    // если строка дошла до 70% раньше, чем text-wrap завершился, она не проигрывается сразу, а
-    // встаёт в очередь; отдельный ScrollTrigger на .idea_top с start:'top 35%' (та же граница, на
-    // которой заканчивается textTl) ставит флаг и разом проигрывает всё, что накопилось. ВАЖНО:
-    // гейтить можно только PLAYED (не scrub) таймлайн — именно поэтому каждая строка получила
-    // свою reversible played-таймлайн (play()/reverse()), а не scrub, гейтинг scrub-таймлайна
-    // ломается на быстром скроле (см. ту же историю).
+    // --- 3. НИЖНИЕ РЯДЫ: каждый по своей позиции ('top 70%'), с гейтом "не раньше колонок".
+    // Флаг textRevealed + очередь pendingRows: если ряд дошёл до 70% раньше, чем колонки
+    // показались — не проигрывается сразу, встаёт в очередь; ScrollTrigger на .idea_top с
+    // start:'top 45%' (= конец textTl) ставит флаг и разом проигрывает накопленное. Гейтить
+    // можно только PLAYED (не scrub) таймлайн — поэтому у каждой строки своя reversible played.
     var textRevealed = false;
     var pendingRows = [];
 
     ScrollTrigger.create({
       trigger: ideaTop,
-      start: 'top 10%',
+      start: 'top 45%',
       onEnter: function () {
         textRevealed = true;
         pendingRows.forEach(function (rowTl) { rowTl.play(); });
@@ -1199,7 +1204,8 @@
     });
 
     if (chars.length) {
-      gsap.set(chars, { opacity: 0.25 });
+      // 2026-08-27: незаполненное состояние 0.25 -> 0.15 (15% непрозрачности от заданного цвета) по запросу
+      gsap.set(chars, { opacity: 0.15 });
       gsap.to(chars, {
         opacity: 1,
         ease: 'none',

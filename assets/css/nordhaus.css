@@ -2767,7 +2767,7 @@ figcaption {
   grid-row-gap: var(--_size---10);
   background-color: var(--bg);
   width: 100%;
-  height: 487.5vh;
+  height: 606.25vh; /* STEP 0.75 (75vh/слайд), 6 слайдов: (5-1+0.75)*100*0.75 + 50 hold + 200 buffer */
   margin-top: -100vh;
   position: relative;
 }
@@ -2804,7 +2804,7 @@ figcaption {
   z-index: 5;
   background-color: var(--bg);
   width: 100%;
-  height: 384.375vh;
+  height: 406.25vh; /* STEP 0.75 (75vh/слайд), 3 слайда: (2-1+0.75)*100*0.75 + 250 + 25 tuned buffer */
   margin-top: -100vh;
   position: relative;
 }
@@ -2963,7 +2963,6 @@ figcaption {
 .section-idea {
   z-index: 7;
   padding: var(--_size---150) var(--_size---20);
-  padding-top: calc(var(--_size---150) + 50vh);
   grid-column-gap: var(--_size---100);
   grid-row-gap: var(--_size---100);
   background-color: var(--bg);
@@ -3836,7 +3835,6 @@ figcaption {
     grid-row-gap: var(--_size---50);
   }.section-idea {
     padding: var(--_size---70) var(--_size---10);
-    padding-top: calc(var(--_size---70) + 50vh);
     grid-column-gap: var(--_size---50);
     grid-row-gap: var(--_size---50);
   }.idea_top {
