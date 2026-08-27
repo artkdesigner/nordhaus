@@ -1171,16 +1171,16 @@
     }
   }
 
-  // 2026-08-27 (по прямому запросу «заключить .approach_middle + .approach_bottom в pin ради
-  // плавных .approach_circle»): в pin ушёл ТОЛЬКО .approach_bottom. Причина — .approach_middle +
-  // .approach_bottom вместе ≈1230px, в 100vh (900px) sticky-стейдж не влезают, круги обрезались
-  // бы. .approach_bottom один — 640px (height:40rem), помещается свободно. .approach_middle
-  // оставлен как был (played-reveal на 'top 85%', приезжает обычным потоком прямо перед пином).
-  // Круги теперь scrub'ятся к runway (.approach_lower-pin, 160vh => ~60vh держаного скрола) —
-  // плавно, на неподвижной запиненной секции. Планшет/мобилка (<992px): pin не активен.
+  // 2026-08-27 (по прямому запросу): .approach_middle + .approach_bottom заключены в рантайм-pin
+  // (.approach_lower-pin runway > .approach_lower-stage sticky 100vh) — .approach_circle
+  // проигрываются плавно на ЗАПИНЕННОЙ (неподвижной) секции, а не пока она сама едет вверх.
+  // Оба блока в естественной раскладке помещаются в один экран на десктопе (пользователь
+  // подтвердил). Десктоп: runway 180vh (=> ~80vh «держаного» скрола на scrub кругов).
+  // .approach_middle сохраняет свой played-reveal ('top 85%') — успевает проиграть, пока стейдж
+  // въезжает, до пина. Планшет/мобилка (<992px): pin не активен, стейдж — обычный блок.
   var lowerPin = null;
-  if (bottom && bottom.parentNode) {
-    var approachSection = bottom.parentNode;
+  if (middle && bottom && middle.parentNode) {
+    var approachSection = middle.parentNode;
     lowerPin = document.createElement('div');
     lowerPin.className = 'approach_lower-pin';
     lowerPin.style.width = '100%';
@@ -1192,13 +1192,15 @@
     lowerStage.style.display = 'flex';
     lowerStage.style.flexDirection = 'column';
     lowerStage.style.justifyContent = 'center';
+    lowerStage.style.gap = isDesktop ? 'var(--_size---100)' : 'var(--_size---50)';
 
-    approachSection.insertBefore(lowerPin, bottom);
+    approachSection.insertBefore(lowerPin, middle);
     lowerPin.appendChild(lowerStage);
+    lowerStage.appendChild(middle);
     lowerStage.appendChild(bottom);
 
     if (isDesktop) {
-      lowerPin.style.height = '160vh';
+      lowerPin.style.height = '180vh';
       lowerStage.style.position = 'sticky';
       lowerStage.style.top = '0';
       lowerStage.style.height = '100vh';
