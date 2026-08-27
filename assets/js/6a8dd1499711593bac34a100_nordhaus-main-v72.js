@@ -892,7 +892,10 @@
     return inner;
   });
 
-  // --- рантайм pin-обёртка для заголовка (без Designer-элемента, как .approach_top-pin) ---
+  // --- рантайм pin-обёртка (без Designer-элемента, тот же приём, что .approach_top-pin) ---
+  // ВЕСЬ .idea_top (грид Webflow: 4 слова в ряду 1 + 3 колонки в ряду 2 на позициях c1/c3/c4
+  // через именные #w-node grid-area — НЕ ТРОГАЕМ, раскладка целиком из CSS) уезжает в стейдж.
+  // Десктоп: стейдж пинится на 150vh, .idea_top по центру 100vh.
   var pin = document.createElement('div');
   pin.className = 'idea_title-pin';
   pin.style.width = '100%';
@@ -900,15 +903,14 @@
 
   var stage = document.createElement('div');
   stage.className = 'idea_title-stage';
-  stage.style.display = 'grid';
   stage.style.width = '100%';
-  stage.style.columnGap = 'var(--_size---20)';
-  stage.style.gridTemplateColumns = isDesktop ? 'repeat(4, 1fr)' : '1fr';
-  stage.style.alignItems = 'start';
+  stage.style.display = 'flex';
+  stage.style.flexDirection = 'column';
+  stage.style.justifyContent = 'center';
 
-  titleWraps.forEach(function (w) { stage.appendChild(w); }); // забираем слова из .idea_top
-  pin.appendChild(stage);
   section.insertBefore(pin, ideaTop);
+  pin.appendChild(stage);
+  stage.appendChild(ideaTop); // .idea_top целиком в стейдж (его грид + #w-node сохраняются)
 
   if (isDesktop) {
     pin.style.height = '150vh';
@@ -916,14 +918,7 @@
     stage.style.top = '0';
     stage.style.height = '100vh';
     stage.style.overflow = 'hidden';
-    stage.style.alignContent = 'center'; // единственный ряд грида по центру 100vh
   }
-
-  // .idea_top теперь только 3 текстовые колонки — сбрасываем Webflow-грид (был 1fr 1fr +
-  // именные #w-node grid-area на колонках 3-5, рассчитанные под слова заголовка)
-  ideaTop.style.gridTemplateColumns = isDesktop ? 'repeat(3, 1fr)' : '1fr';
-  ideaTop.style.gridTemplateRows = 'auto';
-  textWraps.forEach(function (tw) { tw.style.gridArea = 'auto'; });
 
   // --- начальные состояния ---
   // .idea_title-wrap приезжает СНИЗУ. 2026-08-27: в запиненной версии 400% давало ~20vh пустого
@@ -936,43 +931,34 @@
   gsap.set(rows, { y: '2rem', opacity: 0 });
 
   if (ideaTop) {
-    // --- 1. ЗАГОЛОВОК: scrub. Десктоп — привязан к самому runway (.idea_title-pin): 'top top'
-    //    -> 'bottom bottom' => пока стейдж запинен, слова доезжают, финиш ровно к открепу.
-    //    Мобилка — короткий scrub по стейджу (pin не активен). yPercent:400 => 0 + подъём
-    //    .idea_title + раскрытие маски .idea_title-inner, всё синхронно с 'top', стаггер 0.2.
-    var titleTl = gsap.timeline({
+    // --- ЗАГОЛОВОК + КОЛОНКИ: ОДНА scrub-таймлайн. Десктоп — привязана к runway
+    //    (.idea_title-pin) 'top top' -> 'bottom bottom': пока стейдж запинен, сначала доезжают
+    //    слова, СРАЗУ после ('>') — 3 колонки; к моменту открепа всё показано. Мобилка —
+    //    короткий scrub по стейджу. Nameless-append колонок ('>') тут безопасен (в отличие от
+    //    старой регрессии выше по истории): нет внешней отметки вьюпорта, которую надо держать —
+    //    0..1 маппится на весь скрол пина, и заголовок КАК РАЗ должен занять первые ~2/3,
+    //    колонки — последнюю треть.
+    var revealTl = gsap.timeline({
       scrollTrigger: isDesktop
         ? { trigger: pin, start: 'top top', end: 'bottom bottom', scrub: 0.5 }
-        : { trigger: stage, start: 'top 80%', end: 'top 30%', scrub: 0.5 }
+        : { trigger: stage, start: 'top 80%', end: 'top 20%', scrub: 0.5 }
     });
-    titleTl
+    revealTl
       .to(titleWraps, { yPercent: 0, duration: 1, ease: 'none', stagger: 0.2 }, 0)
       .to(titles, { y: 0, opacity: 1, duration: 1, ease: 'none', stagger: 0.2 }, 0)
-      .to(titleInners, { yPercent: 0, duration: 1, ease: 'none', stagger: 0.2 }, 0);
+      .to(titleInners, { yPercent: 0, duration: 1, ease: 'none', stagger: 0.2 }, 0)
+      .to(textWraps, { y: 0, opacity: 1, duration: 0.6, ease: 'none', stagger: 0.15 }, '>');
 
-    // --- 2. ТЕКСТОВЫЕ КОЛОНКИ: после открепления pin, обычным потоком. Триггер на .idea_top
-    //    (теперь это контейнер только 3 колонок), scrub от входа снизу до ~середины экрана.
-    var textTl = gsap.timeline({
-      scrollTrigger: {
-        trigger: ideaTop,
-        start: 'top 85%',
-        end: 'top 45%',
-        scrub: 0.5
-      }
-    });
-    textTl.to(textWraps, { y: 0, opacity: 1, duration: 1, ease: 'none', stagger: 0.2 });
-
-    // --- 3. НИЖНИЕ РЯДЫ: каждый по своей позиции ('top 70%'), с гейтом "не раньше колонок".
-    // Флаг textRevealed + очередь pendingRows: если ряд дошёл до 70% раньше, чем колонки
-    // показались — не проигрывается сразу, встаёт в очередь; ScrollTrigger на .idea_top с
-    // start:'top 45%' (= конец textTl) ставит флаг и разом проигрывает накопленное. Гейтить
-    // можно только PLAYED (не scrub) таймлайн — поэтому у каждой строки своя reversible played.
+    // --- НИЖНИЕ РЯДЫ: каждый по своей позиции ('top 70%'), гейт "не раньше колонок".
+    // Десктоп: гейт на открепе пина (trigger: pin, 'bottom bottom' — момент, когда scrub дошёл
+    // до 1 и колонки показаны). .idea_top триггерить нельзя — он запинен, rect не движется.
+    // Мобилка: обычный триггер на .idea_top.
     var textRevealed = false;
     var pendingRows = [];
 
     ScrollTrigger.create({
-      trigger: ideaTop,
-      start: 'top 45%',
+      trigger: isDesktop ? pin : ideaTop,
+      start: isDesktop ? 'bottom bottom' : 'top 35%',
       onEnter: function () {
         textRevealed = true;
         pendingRows.forEach(function (rowTl) { rowTl.play(); });
@@ -1185,6 +1171,41 @@
     }
   }
 
+  // 2026-08-27 (по прямому запросу «заключить .approach_middle + .approach_bottom в pin ради
+  // плавных .approach_circle»): в pin ушёл ТОЛЬКО .approach_bottom. Причина — .approach_middle +
+  // .approach_bottom вместе ≈1230px, в 100vh (900px) sticky-стейдж не влезают, круги обрезались
+  // бы. .approach_bottom один — 640px (height:40rem), помещается свободно. .approach_middle
+  // оставлен как был (played-reveal на 'top 85%', приезжает обычным потоком прямо перед пином).
+  // Круги теперь scrub'ятся к runway (.approach_lower-pin, 160vh => ~60vh держаного скрола) —
+  // плавно, на неподвижной запиненной секции. Планшет/мобилка (<992px): pin не активен.
+  var lowerPin = null;
+  if (bottom && bottom.parentNode) {
+    var approachSection = bottom.parentNode;
+    lowerPin = document.createElement('div');
+    lowerPin.className = 'approach_lower-pin';
+    lowerPin.style.width = '100%';
+    lowerPin.style.position = 'relative';
+
+    var lowerStage = document.createElement('div');
+    lowerStage.className = 'approach_lower-stage';
+    lowerStage.style.width = '100%';
+    lowerStage.style.display = 'flex';
+    lowerStage.style.flexDirection = 'column';
+    lowerStage.style.justifyContent = 'center';
+
+    approachSection.insertBefore(lowerPin, bottom);
+    lowerPin.appendChild(lowerStage);
+    lowerStage.appendChild(bottom);
+
+    if (isDesktop) {
+      lowerPin.style.height = '160vh';
+      lowerStage.style.position = 'sticky';
+      lowerStage.style.top = '0';
+      lowerStage.style.height = '100vh';
+      lowerStage.style.overflow = 'hidden';
+    }
+  }
+
   var titleEl = document.querySelector('.approach_title');
 
   if (titleEl) {
@@ -1245,13 +1266,13 @@
     if (bottomItems.length) {
       gsap.set(bottomItems, { yPercent: 100, opacity: 0 });
 
+      // 2026-08-27: круги теперь scrub'ятся к runway лоуэр-пина (десктоп) — плавно, на
+      // неподвижной запиненной секции; 'top top' -> 'bottom bottom' = весь ~80vh держаного
+      // скрола. Мобилка (pin не активен) — прежний scrub по самому .approach_bottom.
       gsap.timeline({
-        scrollTrigger: {
-          trigger: bottom,
-          start: 'top 80%',
-          end: '+=60%',
-          scrub: true
-        }
+        scrollTrigger: (isDesktop && lowerPin)
+          ? { trigger: lowerPin, start: 'top top', end: 'bottom bottom', scrub: 0.5 }
+          : { trigger: bottom, start: 'top 80%', end: '+=60%', scrub: true }
       }).to(bottomItems, {
         yPercent: 0,
         opacity: 1,
