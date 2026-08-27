@@ -888,11 +888,11 @@
     return inner;
   });
 
-  // 2026-08-25: y:'100vh' -> yPercent:100 по прямому запросу ("слишком резко") — 100vh почти
-  // всегда сильно больше собственной высоты .idea_title-wrap, поэтому элемент пролетал куда
-  // больший путь, чем нужно для честного "выезда снизу", и выглядел рывком. yPercent:100
-  // отталкивается от РЕАЛЬНОЙ высоты самого элемента.
-  gsap.set(titleWraps, { yPercent: 100 });
+  // 2026-08-25: y:'100vh' -> yPercent:100 по прямому запросу ("слишком резко") — yPercent
+  // отталкивается от РЕАЛЬНОЙ высоты самого элемента, а не от вьюпорта.
+  // 2026-08-27: yPercent:100 -> yPercent:400 по прямому запросу — .idea_title-wrap по-прежнему
+  // приезжает СНИЗУ (как раньше), но путь длиннее: от 400% собственной высоты по Y до 0%.
+  gsap.set(titleWraps, { yPercent: 400 });
   gsap.set(titles, { y: '4rem', opacity: 0 });
   gsap.set(titleInners, { yPercent: 100 });
   gsap.set(textWraps, { y: '2rem', opacity: 0 });
@@ -910,15 +910,17 @@
   // секции/паддингов, ничего пересчитывать вручную не нужно.
   var ideaTop = section.querySelector('.idea_top');
   if (ideaTop) {
-    // 2026-08-27: end 'top 50%' -> 'top 75%' по прямому запросу — "Space" должен доезжать до
-    // своей позиции раньше, когда .idea_top доходит до 75% высоты экрана от верха (а не до
-    // середины). start не тронут ('top bottom'). textTl ниже сдвинут на ту же границу
-    // ('top 75%'), чтобы text-wrap по-прежнему стартовал ровно там, где заканчивается title-wrap.
+    // 2026-08-27 (по скриншоту от пользователя): end 'top 75%' -> 'top 25%'. Анимация
+    // .idea_title-wrap идёт от момента, когда верх .idea_top пересекает нижнюю границу экрана
+    // ('top bottom', не тронут), и заканчивается, когда верх .idea_top доходит до 25% высоты
+    // экрана от верхнего края. Вся эта дистанция уходит на путь title-wrap (-400% -> 0% по Y).
+    // textTl и гейт rows ниже сдвинуты на ту же новую границу ('top 25%'), чтобы цепочка
+    // title -> text -> rows осталась без разрыва (см. историю ниже).
     var titleTl = gsap.timeline({
       scrollTrigger: {
         trigger: ideaTop,
         start: 'top bottom',
-        end: 'top 75%',
+        end: 'top 25%',
         scrub: 0.5
       }
     });
@@ -937,12 +939,13 @@
     // .idea_top, стартующий ровно там, где заканчивается title-wrap (start:'top 50%' — граница
     // предыдущего триггера), с собственным чуть более коротким окном. Так title-wrap остаётся
     // полностью нетронутым (свой собственный триггер, свой полный 0..1), а text-wrap стартует без
-    // разрыва сразу после.
+    // разрыва сразу после. (2026-08-27: границы цепочки сдвинуты — title 'top bottom'->'top 25%',
+    // text 'top 25%'->'top 10%', гейт rows 'top 10%'.)
     var textTl = gsap.timeline({
       scrollTrigger: {
         trigger: ideaTop,
-        start: 'top 75%',
-        end: 'top 35%',
+        start: 'top 25%',
+        end: 'top 10%',
         scrub: 0.5
       }
     });
@@ -964,7 +967,7 @@
 
     ScrollTrigger.create({
       trigger: ideaTop,
-      start: 'top 35%',
+      start: 'top 10%',
       onEnter: function () {
         textRevealed = true;
         pendingRows.forEach(function (rowTl) { rowTl.play(); });

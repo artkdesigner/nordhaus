@@ -3481,7 +3481,7 @@ figcaption {
 .founder_pin {
   width: 100%;
   height: 100vh;
-  padding: var(--_size---70) var(--_size---20);
+  padding: var(--_size---100) var(--_size---20) var(--_size---70);
   grid-column-gap: var(--_size---20);
   grid-row-gap: var(--_size---20);
   flex-flow: column;
