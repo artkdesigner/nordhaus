@@ -854,7 +854,7 @@
 // Idea: заголовок «From Idea to Space» пинится, остальной контент секции появляется после.
 // **2026-08-27 — архитектура пересобрана по прямому запросу.** 4 слова .idea_title-wrap
 // выносятся в рантайм-обёртку .idea_title-pin (runway) > .idea_title-stage (position:sticky;
-// top:0; height:100vh; overflow:hidden; display:grid 4 колонки). На ДЕСКТОПЕ runway = 200vh:
+// top:0; height:100vh; overflow:hidden; display:grid 4 колонки). На ДЕСКТОПЕ runway = 250vh:
 // пока стейдж запинен, .idea_title-wrap проделывают свою анимацию (yPercent:400 -> 0 + подъём
 // .idea_title + маска .idea_title-inner), scrub привязан к самому runway ('top top' ->
 // 'bottom bottom' => финиш ровно к моменту открепления). Когда pin открепился — дальше ОБЫЧНЫМ
@@ -895,7 +895,7 @@
   // --- рантайм pin-обёртка (без Designer-элемента, тот же приём, что .approach_top-pin) ---
   // ВЕСЬ .idea_top (грид Webflow: 4 слова в ряду 1 + 3 колонки в ряду 2 на позициях c1/c3/c4
   // через именные #w-node grid-area — НЕ ТРОГАЕМ, раскладка целиком из CSS) уезжает в стейдж.
-  // Десктоп: стейдж пинится на 200vh (=> ~100vh «держаного» скрола на анимацию; 150vh давало
+  // Десктоп: стейдж пинится на 250vh (=> ~150vh «держаного» скрола на анимацию; 150/200vh давало
   // всего ~50vh и проход был резким), .idea_top по центру 100vh.
   var pin = document.createElement('div');
   pin.className = 'idea_title-pin';
@@ -914,7 +914,7 @@
   stage.appendChild(ideaTop); // .idea_top целиком в стейдж (его грид + #w-node сохраняются)
 
   if (isDesktop) {
-    pin.style.height = '200vh';
+    pin.style.height = '250vh';
     stage.style.position = 'sticky';
     stage.style.top = '0';
     stage.style.height = '100vh';
