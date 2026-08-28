@@ -1516,7 +1516,8 @@
   var lastProgress = 0;
 
   function applyRotation() {
-    var angle = lastProgress * 180;
+    // 2026-08-28: полный ход поворота маски по прогрессу скролла секции — 130° (было 180°).
+    var angle = lastProgress * 130;
     group.setAttribute('transform', 'rotate(' + angle + ' ' + pivot.x + ' ' + pivot.y + ')');
   }
 
@@ -1568,62 +1569,32 @@
   });
 })();
 
-// Founder: reveal контента (title -> img-wrap -> footer), добавлено 2026-08-25 по прямому запросу.
+// Founder: reveal контента. Добавлено 2026-08-25, переработано 2026-08-28.
 // 1) .founder_title — slide-up(2rem) + opacity, duration:1.2 (удвоено с 0.6 2026-08-25 —
 //    ощущалось слишком резким), обратимый paused timeline, триггер top 70% на самом
-//    .founder_title (onEnter -> play(), onLeaveBack -> reverse() — реверс уже был реализован
-//    изначально, часть той же introTl, что и img-wrap; отдельно проверено и подтверждено рабочим
-//    2026-08-25 по запросу "сделай обратную анимацию для этого заголовка при скроле назад").
+//    .founder_title (onEnter -> play(), onLeaveBack -> reverse()).
 // 2) .founder_img-wrap — opacity + slide-up(yPercent:25->0, 25% ОТ СОБСТВЕННОЙ высоты — не
 //    фиксированный rem/px), играет сразу следом за title ВНУТРИ ТОГО ЖЕ timeline (chained .to(),
-//    без своего отдельного триггера) — соответствует формулировке "а потом .founder_img-wrap".
-//    duration:2.4 (дважды удвоено 2026-08-25: 0.6 -> 1.2 -> 2.4, ощущалось слишком резким/быстрым
-//    оба раза). Проверено через data_style_tool, что у класса нет своего Designer-transform —
-//    yPercent можно применять напрямую (см. gotcha про composited transform в конце файла).
-// 3) .founder_footer (содержит .founder_description + скрытую кнопку) — slide-up(2rem) +
-//    opacity, свой отдельный обратимый timeline, триггер top 90% на самом .founder_footer — НО
-//    играет только если img-wrap уже закончил появляться: флаг imgWrapRevealed выставляется в
-//    onComplete/onReverseComplete у intro-timeline (title+img-wrap), footer's onEnter проверяет
-//    флаг — если ещё не готов, просто помечает footerEntered=true и ждёт, пока intro-timeline не
-//    выставит флаг и не запустит footer сама (тот же принцип gating, что и imageWrapReady в
-//    Services).
-//    2026-08-26 (мобилка): по прямому запросу ("founder_description появляется очень поздно")
-//    триггер на мобилке (<992px) сдвинут на "как только пересёк нижнюю границу экрана" — тот же
-//    приём natural-bottom-до-transform + абсолютный пиксель, что только что применили к
-//    news_card (см. историю там же). Десктоп ('top 90%') не тронут. Gating по imgWrapRevealed
-//    не менялся — это отдельная, намеренная последовательность (footer после img-wrap), не часть
-//    этого запроса.
+//    без своего отдельного триггера). duration:2.4.
+// 3) .founder_description — 2026-08-28 по прямому запросу вынесена в ПОЛНОСТЬЮ независимый блок:
+//    больше нет gating по imgWrapRevealed (раньше footer ждал onComplete introTl — title 1.2s +
+//    img-wrap 2.4s = 3.6с реальной анимации — и появлялся "очень поздно"). Теперь свой отдельный
+//    обратимый timeline на самой .founder_description и свой триггер, который срабатывает, как
+//    только элемент пересёк нижнюю границу вьюпорта — для ВСЕХ брейкпоинтов. Приём тот же, что
+//    у news_card: измеряем natural-bottom ДО применения transform (gsap.set сдвигает элемент
+//    на 2rem и исказил бы измерение самой ScrollTrigger), стартовая точка — абсолютный пиксель
+//    скролла (descNaturalBottom - innerHeight).
 (function () {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
   var titleEl = document.querySelector('.founder_title');
   var imgWrap = document.querySelector('.founder_img-wrap');
-  var footerEl = document.querySelector('.founder_footer');
-  if (!titleEl || !imgWrap || !footerEl) return;
-
-  var footerNaturalBottom = footerEl.getBoundingClientRect().bottom + window.scrollY;
+  if (!titleEl || !imgWrap) return;
 
   gsap.set(titleEl, { y: '2rem', opacity: 0 });
   gsap.set(imgWrap, { opacity: 0, yPercent: 25 });
-  gsap.set(footerEl, { y: '2rem', opacity: 0 });
 
-  var imgWrapRevealed = false;
-  var footerEntered = false;
-
-  var footerTl = gsap.timeline({ paused: true });
-  footerTl.to(footerEl, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out' });
-
-  var introTl = gsap.timeline({
-    paused: true,
-    onComplete: function () {
-      imgWrapRevealed = true;
-      if (footerEntered) footerTl.play();
-    },
-    onReverseComplete: function () {
-      imgWrapRevealed = false;
-    }
-  });
-
+  var introTl = gsap.timeline({ paused: true });
   introTl
     .to(titleEl, { y: 0, opacity: 1, duration: 1.2, ease: 'power2.out' })
     .to(imgWrap, { opacity: 1, yPercent: 0, duration: 2.4, ease: 'power2.out' });
@@ -1634,29 +1605,27 @@
     onEnter: function () { introTl.play(); },
     onLeaveBack: function () { introTl.reverse(); }
   });
+})();
 
-  // 2026-08-26 (мобилка, продолжение): само по себе исправление позиции триггера выше почти не
-  // повлияло на реальную задержку — Playwright-проверка градуальным скроллом показала, что
-  // .founder_description уже геометрически виден на экране (~633px от верха при 844px высоты)
-  // ЗАДОЛГО до того, как opacity начинает расти: настоящая причина — gating на imgWrapRevealed,
-  // который выставляется только по onComplete у introTl (title 1.2s + img-wrap 2.4s = 3.6
-  // РЕАЛЬНЫХ секунды анимации, не скролла). На мобилке это и есть "очень поздно". По прямому
-  // запросу на мобилке (<992px) footer больше НЕ ждёт imgWrapRevealed — играет сразу по своему
-  // (уже исправленному выше) триггеру. Десктоп — gating не тронут, там это осталось намеренной
-  // последовательностью (title -> img-wrap -> footer).
+// Founder: .founder_description — независимая обратимая reveal-анимация (см. п.3 выше).
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  var descEl = document.querySelector('.founder_description');
+  if (!descEl) return;
+
+  var descNaturalBottom = descEl.getBoundingClientRect().bottom + window.scrollY;
+
+  gsap.set(descEl, { y: '2rem', opacity: 0 });
+
+  var descTl = gsap.timeline({ paused: true });
+  descTl.to(descEl, { y: 0, opacity: 1, duration: 0.6, ease: 'power2.out' });
+
   ScrollTrigger.create({
-    trigger: footerEl,
-    start: function () {
-      return window.innerWidth < 992 ? (footerNaturalBottom - window.innerHeight) : 'top 90%';
-    },
-    onEnter: function () {
-      footerEntered = true;
-      if (imgWrapRevealed || window.innerWidth < 992) footerTl.play();
-    },
-    onLeaveBack: function () {
-      footerEntered = false;
-      footerTl.reverse();
-    }
+    trigger: descEl,
+    start: function () { return descNaturalBottom - window.innerHeight; },
+    onEnter: function () { descTl.play(); },
+    onLeaveBack: function () { descTl.reverse(); }
   });
 })();
 
