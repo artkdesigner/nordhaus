@@ -259,7 +259,15 @@
   var DARK = '#252525';
   var isDarkState = null;
 
+  // 2026-08-28 (эксперимент): авто-контраст текста навбара через CSS mix-blend-mode:difference
+  // (см. блок в nordhaus.css). Пока он включён, дискретный JS-переключатель светлый/тёмный НЕ
+  // нужен и мешает (инлайновый color ломает инверсию) — setDark становится no-op. Скрытие
+  // навбара над Slider (setHidden) продолжает работать как раньше. Вернуть старое поведение =
+  // BLEND_MODE = false + убрать mix-blend-mode из CSS.
+  var BLEND_MODE = true;
+
   function setDark(isDark) {
+    if (BLEND_MODE) return;
     if (isDark === isDarkState) return;
     isDarkState = isDark;
     colorTargets.forEach(function (el) {

@@ -4519,3 +4519,32 @@ figcaption {
   }#w-node-fe1c0a4d-4260-d988-e26c-f67ceb417f43-ba142e5a {
     grid-column-start: 2;
   }}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Navbar auto-contrast via mix-blend-mode — эксперимент 2026-08-28
+   Белый текст навбара + difference = автоматическая читаемость на любом тоне:
+   светлый над тёмным, тёмный над светлым, инверсия над фото/видео.
+   .navbar (position:fixed, без transform/opacity/filter) НЕ изолирует блендинг,
+   поэтому difference считается против контента страницы под навбаром.
+   Требует BLEND_MODE=true в JS-бандле (отключает дискретный переключатель цвета).
+
+   Desktop (>=992px): blend на всей .navbar — весь видимый текст сразу.
+   Tablet/mobile (<=991px): blend ТОЛЬКО на логотипе и кнопке меню. Выезжающее
+   меню .navbar_menu (у него свой сплошной background-color: var(--bg)) — не трогаем.
+   ───────────────────────────────────────────────────────────────────────────── */
+@media (min-width: 992px) {
+  .navbar {
+    mix-blend-mode: difference;
+  }
+}
+
+@media (max-width: 991px) {
+  .navbar_logo,
+  .navbar_project-link.menu-btn {
+    mix-blend-mode: difference;
+  }
+  .navbar_menu,
+  .navbar_menu * {
+    mix-blend-mode: normal;
+  }
+}
