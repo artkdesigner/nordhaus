@@ -1580,10 +1580,17 @@
 //    больше нет gating по imgWrapRevealed (раньше footer ждал onComplete introTl — title 1.2s +
 //    img-wrap 2.4s = 3.6с реальной анимации — и появлялся "очень поздно"). Теперь свой отдельный
 //    обратимый timeline на самой .founder_description и свой триггер, который срабатывает, как
-//    только элемент пересёк нижнюю границу вьюпорта — для ВСЕХ брейкпоинтов. Приём тот же, что
-//    у news_card: измеряем natural-bottom ДО применения transform (gsap.set сдвигает элемент
-//    на 2rem и исказил бы измерение самой ScrollTrigger), стартовая точка — абсолютный пиксель
-//    скролла (descNaturalBottom - innerHeight).
+//    только элемент пересёк нижнюю границу вьюпорта — для ВСЕХ брейкпоинтов.
+//    2026-08-28 (обратная анимация для секции): start сделан ФУНКЦИЕЙ (GSAP пересчитывает её на
+//    каждом ScrollTrigger.refresh()), а не константой, снятой один раз при выполнении скрипта.
+//    Причина: .founder_img — loading="lazy" и на ~26000px вниз, в момент выполнения IIFE он ещё
+//    не загружен, секция короче реальной, и снятая тогда natural-bottom .founder_description
+//    указывала на позицию ЗАДОЛГО до секции — reveal (и его reverse) отыгрывались за кадром, на
+//    экране описание просто всегда было видимым. Теперь: (а) start пересчитывается из живого
+//    rect с компенсацией текущего transform от gsap.set (~32px, gsap.getProperty 'y'); (б) после
+//    load самого .founder_img форсим ScrollTrigger.refresh() (global 'load' не помогает — lazy-
+//    картинка вне вьюпорта не блокирует window load). onLeaveBack -> reverse() — обратная
+//    анимация при скроле вверх.
 (function () {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
@@ -1612,9 +1619,8 @@
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
   var descEl = document.querySelector('.founder_description');
+  var founderImg = document.querySelector('.founder_img');
   if (!descEl) return;
-
-  var descNaturalBottom = descEl.getBoundingClientRect().bottom + window.scrollY;
 
   gsap.set(descEl, { y: '2rem', opacity: 0 });
 
@@ -1623,10 +1629,21 @@
 
   ScrollTrigger.create({
     trigger: descEl,
-    start: function () { return descNaturalBottom - window.innerHeight; },
+    // «как только пересёк нижнюю границу экрана»: natural-bottom элемента минус текущий
+    // transform от gsap.set минус высота вьюпорта. Функция — чтобы пересчитываться на refresh
+    // (см. блок про lazy .founder_img в комментарии выше).
+    start: function () {
+      var rectBottom = descEl.getBoundingClientRect().bottom + window.scrollY;
+      var ty = parseFloat(gsap.getProperty(descEl, 'y')) || 0;
+      return (rectBottom - ty) - window.innerHeight;
+    },
     onEnter: function () { descTl.play(); },
     onLeaveBack: function () { descTl.reverse(); }
   });
+
+  if (founderImg && !(founderImg.complete && founderImg.naturalWidth > 0)) {
+    founderImg.addEventListener('load', function () { ScrollTrigger.refresh(); }, { once: true });
+  }
 })();
 
 // Footer (.footer, id footer): .footer_left и .footer_contacts появляются по очереди
