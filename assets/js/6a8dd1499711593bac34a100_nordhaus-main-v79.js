@@ -247,6 +247,14 @@
   var sliderPin = document.querySelector('.slider_pin');
   var echoActiveSlide = 0;
 
+  // 2026-08-28: над hero (тёмное видео) blend-mode переливается — по прямому запросу навбар
+  // над hero делаем просто СВЕТЛЫМ (белый текст, mix-blend-mode:normal через класс .navbar--solid),
+  // на всех остальных секциях blend остаётся. .hero_pin — реальный sticky-бокс (100vh), его rect
+  // корректно отражает текущую видимость; .section-philosophy (z-index выше) наезжает сверху —
+  // как только её верх дошёл до полосы навбара, hero уже перекрыт и blend снова включаем.
+  var heroPin = document.querySelector('.hero_pin');
+  var philosophySection = document.querySelector('.section-philosophy');
+
   // 2026-08-25 (фикс бага): .navbar_project-link (Silence/Horizon/Echo/Quiet Geometry/Studio/
   // contacts) и .menu-btn имеют СВОЙ явный color в CSS (var(--text-light-primary)) — собственное
   // объявленное свойство элемента не наследуется от родителя, поэтому inline color, который JS
@@ -289,6 +297,13 @@
     navbar.style.pointerEvents = isHidden ? 'none' : '';
   }
 
+  var isSolidState = null;
+  function setSolid(isSolid) {
+    if (isSolid === isSolidState) return;
+    isSolidState = isSolid;
+    navbar.classList.toggle('navbar--solid', isSolid);
+  }
+
   // 2026-08-26 (фикс бага): .horizon_mask перестаёт быть видимым (opacity доходит до 0 через
   // наездный fade на .section_echo, см. stages ниже) РАНЬШЕ, чем его bounding rect перестаёт
   // формально "перекрывать" navbar — sticky-детач тянется ещё на 100vh (высота самой маски)
@@ -318,6 +333,16 @@
         pinOverlapping = false;
       }
       setHidden(pinOverlapping);
+    }
+
+    if (heroPin) {
+      var hr = heroPin.getBoundingClientRect();
+      var heroBehindNav = hr.top <= navHeight && hr.bottom >= 0;
+      var covered = false;
+      if (philosophySection) {
+        covered = philosophySection.getBoundingClientRect().top <= navHeight;
+      }
+      setSolid(heroBehindNav && !covered);
     }
   }
 

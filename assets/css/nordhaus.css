@@ -4548,3 +4548,11 @@ figcaption {
     mix-blend-mode: normal;
   }
 }
+
+/* Над секцией hero (тёмное видео) blend переливается — там навбар просто светлый
+   (белый текст, без blend). Класс .navbar--solid ставит/снимает JS (setSolid). */
+.navbar.navbar--solid,
+.navbar.navbar--solid .navbar_logo,
+.navbar.navbar--solid .navbar_project-link.menu-btn {
+  mix-blend-mode: normal;
+}
