@@ -1606,9 +1606,9 @@
 // 1) .founder_title — slide-up(2rem) + opacity, duration:1.2 (удвоено с 0.6 2026-08-25 —
 //    ощущалось слишком резким), обратимый paused timeline, триггер top 70% на самом
 //    .founder_title (onEnter -> play(), onLeaveBack -> reverse()).
-// 2) .founder_img-wrap — opacity + slide-up(yPercent:25->0, 25% ОТ СОБСТВЕННОЙ высоты — не
-//    фиксированный rem/px), играет сразу следом за title ВНУТРИ ТОГО ЖЕ timeline (chained .to(),
-//    без своего отдельного триггера). duration:2.4.
+// 2) .founder_img-wrap — opacity only (slide-up yPercent:25->0 removed 2026-08-29 по прямому
+//    запросу, для всех брейкпоинтов), играет сразу следом за title ВНУТРИ ТОГО ЖЕ timeline
+//    (chained .to(), без своего отдельного триггера). duration:2.4.
 // 3) .founder_description — 2026-08-28 по прямому запросу вынесена в ПОЛНОСТЬЮ независимый блок:
 //    больше нет gating по imgWrapRevealed (раньше footer ждал onComplete introTl — title 1.2s +
 //    img-wrap 2.4s = 3.6с реальной анимации — и появлялся "очень поздно"). Теперь свой отдельный
@@ -1632,12 +1632,12 @@
   if (!titleEl || !imgWrap) return;
 
   gsap.set(titleEl, { y: '2rem', opacity: 0 });
-  gsap.set(imgWrap, { opacity: 0, yPercent: 25 });
+  gsap.set(imgWrap, { opacity: 0 });
 
   var introTl = gsap.timeline({ paused: true });
   introTl
     .to(titleEl, { y: 0, opacity: 1, duration: 1.2, ease: 'power2.out' })
-    .to(imgWrap, { opacity: 1, yPercent: 0, duration: 2.4, ease: 'power2.out' });
+    .to(imgWrap, { opacity: 1, duration: 2.4, ease: 'power2.out' });
 
   ScrollTrigger.create({
     trigger: titleEl,
