@@ -4529,9 +4529,20 @@ figcaption {
    поэтому difference считается против контента страницы под навбаром.
    Требует BLEND_MODE=true в JS-бандле (отключает дискретный переключатель цвета).
 
-   Desktop (>=992px): blend на всей .navbar — весь видимый текст сразу.
-   Tablet/mobile (<=991px): blend ТОЛЬКО на логотипе и кнопке меню. Выезжающее
-   меню .navbar_menu (у него свой сплошной background-color: var(--bg)) — не трогаем.
+   2026-08-29 (фикс "не работает на планшете/мобилке"): blend ставился ТОЛЬКО на
+   .navbar_logo/.menu-btn (не на .navbar), а .navbar сам уже является stacking
+   context (position:fixed + z-index) — mix-blend-mode на ЕГО ДЕТЯХ блендится
+   только ВНУТРИ этого контекста (против собственного прозрачного фона navbar),
+   а не против реального контента страницы позади. Результат — почти невидимый
+   бледный текст вместо чёткой инверсии (desktop так же не страдал, т.к. blend
+   там стоит на самом .navbar, корне контекста, а не на его детях). Фикс: blend
+   переставлен на .navbar на ОБОИХ брейкпоинтах; чтобы выезжающее меню
+   .navbar_menu (свой сплошной background-color: var(--bg)) не подхватывало
+   инверсию как часть родительского navbar — ему дан СОБСТВЕННЫЙ stacking
+   context (isolation:isolate) + mix-blend-mode:normal, что выводит его из-под
+   блендинга родителя. Verified via Playwright (pixel-level screenshot compare
+   over .section-philosophy, светлый фон — до фикса лого/menu был еле виден,
+   после фикса чётко тёмный, как на десктопе).
    ───────────────────────────────────────────────────────────────────────────── */
 @media (min-width: 992px) {
   .navbar {
@@ -4540,12 +4551,11 @@ figcaption {
 }
 
 @media (max-width: 991px) {
-  .navbar_logo,
-  .navbar_project-link.menu-btn {
+  .navbar {
     mix-blend-mode: difference;
   }
-  .navbar_menu,
-  .navbar_menu * {
+  .navbar_menu {
+    isolation: isolate;
     mix-blend-mode: normal;
   }
 }
