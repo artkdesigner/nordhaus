@@ -268,14 +268,26 @@
   var isDarkState = null;
 
   // 2026-08-28 (эксперимент): авто-контраст текста навбара через CSS mix-blend-mode:difference
-  // (см. блок в nordhaus.css). Пока он включён, дискретный JS-переключатель светлый/тёмный НЕ
-  // нужен и мешает (инлайновый color ломает инверсию) — setDark становится no-op. Скрытие
-  // навбара над Slider (setHidden) продолжает работать как раньше. Вернуть старое поведение =
-  // BLEND_MODE = false + убрать mix-blend-mode из CSS.
+  // (см. блок в nordhaus.css). Пока он активен, дискретный JS-переключатель светлый/тёмный НЕ
+  // нужен и мешает (инлайновый color ломает инверсию) — setDark становится no-op.
+  // 2026-08-31: блендинг убран на планшете/мобилке (выглядел странно) — там CSS mix-blend-mode
+  // больше не ставится, поэтому setDark снова активен ниже 992px и рулит контрастом сам, как до
+  // эксперимента. На десктопе (blend остался) setDark по-прежнему no-op, и при переходе туда со
+  // старого инлайнового color сначала сбрасывает его в '', чтобы не ломать инверсию (та самая
+  // причина, по которой этот флаг вообще завели). Скрытие навбара над Slider (setHidden)
+  // продолжает работать как раньше на всех брейкпоинтах.
   var BLEND_MODE = true;
 
   function setDark(isDark) {
-    if (BLEND_MODE) return;
+    if (BLEND_MODE && window.innerWidth >= 992) {
+      if (isDarkState !== null) {
+        isDarkState = null;
+        colorTargets.forEach(function (el) {
+          el.style.color = '';
+        });
+      }
+      return;
+    }
     if (isDark === isDarkState) return;
     isDarkState = isDark;
     colorTargets.forEach(function (el) {

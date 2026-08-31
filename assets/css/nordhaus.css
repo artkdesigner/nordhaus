@@ -4525,41 +4525,20 @@ figcaption {
   }}
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Navbar auto-contrast via mix-blend-mode — эксперимент 2026-08-28
+   Navbar auto-contrast via mix-blend-mode — эксперимент 2026-08-28, desktop-only.
    Белый текст навбара + difference = автоматическая читаемость на любом тоне:
    светлый над тёмным, тёмный над светлым, инверсия над фото/видео.
    .navbar (position:fixed, без transform/opacity/filter) НЕ изолирует блендинг,
    поэтому difference считается против контента страницы под навбаром.
-   Требует BLEND_MODE=true в JS-бандле (отключает дискретный переключатель цвета).
 
-   2026-08-29 (фикс "не работает на планшете/мобилке"): blend ставился ТОЛЬКО на
-   .navbar_logo/.menu-btn (не на .navbar), а .navbar сам уже является stacking
-   context (position:fixed + z-index) — mix-blend-mode на ЕГО ДЕТЯХ блендится
-   только ВНУТРИ этого контекста (против собственного прозрачного фона navbar),
-   а не против реального контента страницы позади. Результат — почти невидимый
-   бледный текст вместо чёткой инверсии (desktop так же не страдал, т.к. blend
-   там стоит на самом .navbar, корне контекста, а не на его детях). Фикс: blend
-   переставлен на .navbar на ОБОИХ брейкпоинтах; чтобы выезжающее меню
-   .navbar_menu (свой сплошной background-color: var(--bg)) не подхватывало
-   инверсию как часть родительского navbar — ему дан СОБСТВЕННЫЙ stacking
-   context (isolation:isolate) + mix-blend-mode:normal, что выводит его из-под
-   блендинга родителя. Verified via Playwright (pixel-level screenshot compare
-   over .section-philosophy, светлый фон — до фикса лого/menu был еле виден,
-   после фикса чётко тёмный, как на десктопе).
+   2026-08-31 (убран на планшете/мобилке по прямому запросу — выглядел странно,
+   особенно на выезжающем .navbar_menu): на этих брейкпоинтах JS возвращён к
+   дискретному переключателю цвета (setDark в nordhaus-main-v81.js), который
+   стоял тут ДО эксперимента с блендом; см. комментарий у BLEND_MODE в JS.
    ───────────────────────────────────────────────────────────────────────────── */
 @media (min-width: 992px) {
   .navbar {
     mix-blend-mode: difference;
-  }
-}
-
-@media (max-width: 991px) {
-  .navbar {
-    mix-blend-mode: difference;
-  }
-  .navbar_menu {
-    isolation: isolate;
-    mix-blend-mode: normal;
   }
 }
 
