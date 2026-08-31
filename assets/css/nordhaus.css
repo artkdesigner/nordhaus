@@ -2615,6 +2615,7 @@ figcaption {
   font-size: 2.25rem;
   line-height: 100%;
   position: absolute;
+  bottom: var(--_size---20);
 }
 
 .section-philosophy {
@@ -3798,6 +3799,7 @@ figcaption {
     order: 2;
   }.hero_title {
     font-size: 1.25rem;
+    bottom: var(--_size---10);
   }.section-philosophy {
     padding-right: var(--_size---10);
     padding-left: var(--_size---10);
@@ -4126,6 +4128,7 @@ figcaption {
     padding-right: 0;
   }.hero_title {
     font-size: 1.125rem;
+    bottom: var(--_size---10);
   }.philosophy_top, .philosophy_top-left {
     grid-column-gap: var(--_size---5);
     grid-row-gap: var(--_size---5);
