@@ -578,12 +578,11 @@
 
       ScrollTrigger.create({
         trigger: section,
-        // 2026-08-26: шаг сокращён до 0.5x; 2026-08-27: по прямому запросу поднят до 0.75x
-        // innerHeight (75vh на слайд) на десктопе. Только длительность ШАГА, не скорость
-        // самого перехода (duration/ease у gsap.to ниже не тронуты). На планшете/мобилке
-        // (<992px) фактор зафиксирован на 1 — см. tabletMobileStep выше.
-        // Высота .section_horizon пересчитана под 0.75: 606.25vh (см. CSS).
-        start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * tabletMobileStep(0.75)) + ' top'; },
+        // 2026-08-26: шаг сокращён до 0.5x; 2026-08-27: поднят до 0.75x; 2026-08-31: по прямому
+        // запросу возвращён к 1x innerHeight (100vh на слайд) на десктопе — планшет/мобилка и так
+        // уже были на 1x (см. tabletMobileStep выше), так что теперь все брейкпоинты совпадают.
+        // Высота .section_horizon пересчитана под 1x: 725vh (см. CSS).
+        start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * tabletMobileStep(1)) + ' top'; },
         onEnter: function () {
           gsap.to(slide, { yPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
           gsap.to(slides[i - 1], { yPercent: -10, duration: 1, ease: 'power2.inOut', overwrite: true });
@@ -633,12 +632,11 @@
 
         ScrollTrigger.create({
           trigger: section,
-          // 2026-08-26: 0.5x -> 0.625x; 2026-08-27: по прямому запросу поднят до 0.75x innerHeight
-          // (75vh на слайд) на десктопе, заодно с horizon. Только длительность ШАГА, не скорость
-          // самого перехода (duration/ease у gsap.to ниже не тронуты). На планшете/мобилке
-          // (<992px) фактор зафиксирован на 1 — см. tabletMobileStep выше.
-          // Высота .section_echo пересчитана под 0.75: 406.25vh (109.375+275 -> 131.25+275, см. CSS).
-          start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * tabletMobileStep(0.75)) + ' top'; },
+          // 2026-08-26: 0.5x -> 0.625x; 2026-08-27: поднят до 0.75x; 2026-08-31: по прямому запросу
+          // возвращён к 1x innerHeight (100vh на слайд) на десктопе, заодно с horizon — планшет/
+          // мобилка и так уже были на 1x (см. tabletMobileStep выше).
+          // Высота .section_echo пересчитана под 1x: 450vh (см. CSS).
+          start: function () { return 'top+=' + ((i - 1 + 0.75) * window.innerHeight * tabletMobileStep(1)) + ' top'; },
           onEnter: function () {
             gsap.to(cardSlide, { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
             gsap.to(bgSlide, { xPercent: 0, duration: 1, ease: 'power2.inOut', overwrite: true });
