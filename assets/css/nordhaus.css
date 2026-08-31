@@ -3222,18 +3222,6 @@ figcaption {
   padding-top: var(--_size---150);
 }
 
-/* Планшет (480–991px, по прямому запросу): title по центру approach_top-pin. Бокс
-   по-прежнему shrink-wrap'ится под контент (без sticky/фиксированной высоты — это
-   намеренно отключено на планшете/мобилке, см. комментарий в JS про 200vh-runway),
-   поэтому одного padding-top для центрирования недостаточно — паддинг снизу того же
-   размера делает отступы симметричными сверху и снизу title. Мобилка (<480px) не
-   тронута — там своя, более компактная раскладка. */
-@media screen and (min-width: 480px) and (max-width: 991px) {
-  .approach_top-pin {
-    padding-bottom: var(--_size---70);
-  }
-}
-
 .approach_title {
   letter-spacing: -.375rem;
   font-family: Editorial New, Times New Roman, sans-serif;
