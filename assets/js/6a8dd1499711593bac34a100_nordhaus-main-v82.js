@@ -1561,8 +1561,8 @@
   var lastProgress = 0;
 
   function applyRotation() {
-    // 2026-08-28: полный ход поворота маски по прогрессу скролла секции — 130° (было 180°).
-    var angle = lastProgress * 130;
+    // 2026-08-31: полный ход поворота маски по прогрессу скролла секции — 125° (было 130°).
+    var angle = lastProgress * 125;
     group.setAttribute('transform', 'rotate(' + angle + ' ' + pivot.x + ' ' + pivot.y + ')');
   }
 
