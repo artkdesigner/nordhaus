@@ -719,7 +719,14 @@
 
       ScrollTrigger.create({
         trigger: section,
-        start: 'top 10%',
+        // 2026-09-04: lockScroll configs (silence/quiet) fire at 'top top' instead of 'top 10%' —
+        // with the scroll-lock above freezing scroll for the full reveal duration, starting at
+        // 'top 10%' left the sticky mask still ~10vh short of its own top:0 pinned position when
+        // the lock released, so the very next scroll tick visibly "snapped" the section the rest
+        // of the way into place. 'top top' == the exact point the mask's position:sticky actually
+        // engages, so lock+reveal now happen once it's already fully seated — nothing left to
+        // settle afterward. horizon/echo (no lock) keep 'top 10%', unrelated/unaffected.
+        start: cfg.lockScroll ? 'top top' : 'top 10%',
         onEnter: function () {
           lockScrollIfNeeded();
           gsap.to(mask, {
