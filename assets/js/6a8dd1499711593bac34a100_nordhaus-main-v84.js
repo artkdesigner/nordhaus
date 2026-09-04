@@ -661,12 +661,25 @@
   // контент — его прямые дети, получающие обратный scale, чтобы визуально не растягиваться вместе с маской.
   // Для horizon/echo — триггеры смены слайдов регистрируются только ОДИН раз, после первого
   // завершения анимации (slidesReady-флаг защищает от повторной регистрации при скроле туда-сюда).
+  // 2026-09-04: Silence/Quiet Geometry — по прямому запросу "быстрый скролл не должен позволять
+  // пролистать эти секции незамеченными". Раньше reveal (scaleY 0.001->1) был чисто time-based
+  // (DURATION=1.5s), но НЕ мешал скролу продолжаться — при быстром скроле следующая секция уже
+  // наезжает и гасит силуэт по своей scroll-scrubbed анимации (см. блок stages выше) поверх ещё не
+  // доигравшего reveal, из-за чего Silence/Quiet можно было мельком не заметить.
+  // Решение — lockScroll:true у этих двух конфигов: на время reveal-твина (ровно DURATION, тот же
+  // таймер, что и раньше) останавливаем Lenis (lenis.stop()), физически замораживая скролл, и
+  // включаем обратно (lenis.start()) по onComplete. Пока залочено — ScrollTrigger-скрабы соседних
+  // секций тоже не двигаются (они читают ту же scroll-позицию, которую держит Lenis), так что
+  // анимация гарантированно доигрывает до конца, прежде чем можно уехать дальше. Horizon/Echo не
+  // трогаем — там уже своя scroll-привязанная смена слайдов, тот же риск "не заметить" не стоит.
+  // Safety-таймаут (DURATION+300ms) на случай, если onComplete не сработает (overwrite/resize) —
+  // иначе скролл остался бы залоченным навсегда.
   (function () {
     var configs = [
-      { section: '.section_silence', mask: '.silence_inner' },
+      { section: '.section_silence', mask: '.silence_inner', lockScroll: true },
       { section: '.section_horizon', mask: '.horizon_mask', afterReveal: setupHorizonSlides },
       { section: '.section_echo', mask: '.echo_mask', afterReveal: setupEchoSlides },
-      { section: '.section_quiet', mask: '.quiet_inner' }
+      { section: '.section_quiet', mask: '.quiet_inner', lockScroll: true }
     ];
 
     var DURATION = 1.5; // было 1s, +50% для плавности
@@ -691,10 +704,24 @@
         });
       }
 
+      var locked = false;
+      function lockScrollIfNeeded() {
+        if (!cfg.lockScroll || !window.lenis || typeof window.lenis.stop !== 'function') return;
+        window.lenis.stop();
+        locked = true;
+        setTimeout(unlockScroll, DURATION * 1000 + 300);
+      }
+      function unlockScroll() {
+        if (!locked) return;
+        locked = false;
+        if (window.lenis && typeof window.lenis.start === 'function') window.lenis.start();
+      }
+
       ScrollTrigger.create({
         trigger: section,
         start: 'top 10%',
         onEnter: function () {
+          lockScrollIfNeeded();
           gsap.to(mask, {
             scaleY: 1,
             duration: DURATION,
@@ -702,6 +729,7 @@
             overwrite: true,
             onUpdate: syncContent,
             onComplete: function () {
+              unlockScroll();
               if (cfg.afterReveal && !slidesReady) {
                 slidesReady = true;
                 cfg.afterReveal();
@@ -710,6 +738,7 @@
           });
         },
         onLeaveBack: function () {
+          unlockScroll();
           gsap.to(mask, {
             scaleY: 0.001,
             duration: DURATION,
